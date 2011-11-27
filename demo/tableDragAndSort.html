@@ -1,0 +1,223 @@
+<!DOCTYPE HTML>
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <title></title>
+  <style>
+    .wrapper{
+      border:3px solid #f1f1f1;
+      border-spacing:0;
+      width:510px;
+      margin-left:300px;
+    }
+    .portfolio{
+      cursor:default;
+
+    }
+    .portfolio tr th{
+      padding:4px 0px;
+
+    }
+    .portfolio tr td,#dragTable tr td{
+      padding:4px 5px;
+      border-top:1px solid #e4f2ff;
+      border-collapse:collapse;
+    }
+
+    .portfolio tr{
+      border:1px solid blue;
+
+    }
+    #dragTable{
+      position:absolute;
+      display:none;
+      width:510px;
+    }
+    .dragging{
+      
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <table class="portfolio" cellspacing="0" cellpadding="0">
+      <thead>
+        <tr>
+          <th>股票</th>
+          <th>当前价</th>
+          <th>涨跌额</th>
+          <th>涨跌幅</th>
+          <th>成交量</th>
+          <th>市值</th>
+          <th>目标价</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a target="_blank" title="腾讯控股 (00700)" href="/S/00700">腾讯控股 (00700)</a></td>
+          <td>152.1</td>
+          <td>-4.70</td>
+          <td>-3.00%</td>
+          <td>261.94万</td>
+          <td>2795.96亿</td>
+          <td>180.0</td>
+        </tr>
+        <tr>
+          <td><a target="_blank" title="腾讯控股 (00700)" href="/S/00700">新浪 (00700)</a></td>
+          <td>152.1</td>
+          <td>-4.70</td>
+          <td>-3.00%</td>
+          <td>261.94万</td>
+          <td>2795.96亿</td>
+          <td>180.0</td>
+        </tr>
+        <tr>
+          <td><a target="_blank" title="腾讯控股 (00700)" href="/S/00700">百度 (00700)</a></td>
+          <td>152.1</td>
+          <td>-4.70</td>
+          <td>-3.00%</td>
+          <td>261.94万</td>
+          <td>2795.96亿</td>
+          <td>180.0</td>
+        </tr>
+        <tr>
+          <td><a target="_blank" title="腾讯控股 (00700)" href="/S/00700">阿里巴巴 (00700)</a></td>
+          <td>152.1</td>
+          <td>-4.70</td>
+          <td>-3.00%</td>
+          <td>261.94万</td>
+          <td>2795.96亿</td>
+          <td>180.0</td>
+        </tr>
+                <tr>
+          <td><a target="_blank" title="腾讯控股 (00700)" href="/S/00700">腾讯控股 (00700)</a></td>
+          <td>152.1</td>
+          <td>-4.70</td>
+          <td>-3.00%</td>
+          <td>261.94万</td>
+          <td>2795.96亿</td>
+          <td>180.0</td>
+        </tr>
+        <tr>
+          <td><a target="_blank" title="腾讯控股 (00700)" href="/S/00700">新浪 (00700)</a></td>
+          <td>152.1</td>
+          <td>-4.70</td>
+          <td>-3.00%</td>
+          <td>261.94万</td>
+          <td>2795.96亿</td>
+          <td>180.0</td>
+        </tr>
+        <tr>
+          <td><a target="_blank" title="腾讯控股 (00700)" href="/S/00700">百度 (00700)</a></td>
+          <td>152.1</td>
+          <td>-4.70</td>
+          <td>-3.00%</td>
+          <td>261.94万</td>
+          <td>2795.96亿</td>
+          <td>180.0</td>
+        </tr>
+        <tr>
+          <td><a target="_blank" title="腾讯控股 (00700)" href="/S/00700">阿里巴巴 (00700)</a></td>
+          <td>152.1</td>
+          <td>-4.70</td>
+          <td>-3.00%</td>
+          <td>261.94万</td>
+          <td>2795.96亿</td>
+          <td>180.0</td>
+        </tr>
+
+      </tbody>
+    </table>
+
+     
+
+  </div>
+  <script type="text/javascript" src="./js/jquery.js"></script>
+  <script type="text/javascript">
+/*    #dragTable{
+      position:absolute;
+      display:none;
+      width:510px;
+    }样式*/
+    function tableDragAndSort($table,callback){
+      var originEventPosition={},
+        originTrPosition={},
+        dragTr,
+        trHeight=$table.find("tbody tr").height(),
+        tbodyTop=$table.find("tbody").offset().top,
+        currentHeight=tbodyTop+trHeight/2,
+        heightList=[currentHeight],//判断高度列表
+        current,target,
+        trList=$(".portfolio tbody tr");
+
+    for(var i=0,len=trList.length-2;i<len;i++){
+      currentHeight+=trHeight;
+      heightList.push(currentHeight);
+    }
+
+    $table.delegate("tbody tr","mousedown",function(e){
+      var tr=$(this);
+      originEventPosition={left:e.pageX,top:e.pageY};//初始事件位置
+      originTrPosition={left:tr.offset().left,top:tr.offset().top};//初始行位置
+      dragTr=tr;
+      current=tr.prevAll().length;//当前index
+      
+      tr.data("isDragable",true).css("visibility","hidden");
+      $("#dragTable").css({"top":(tr.offset().top)+"px","left":(tr.offset().left)+"px"}).find("tbody tr").html(tr.html());//确保dragTable的表格样式和当前表格一样
+      $("#dragTable").show();
+      return false;
+    })
+
+    if(!$("#dragTable").length){
+      $("body").append('<div id="dragTable"><table cellspacing="0" cellpadding="0"><tbody><tr></tr></tbody></table></div>');
+    }
+
+    $("#dragTable").delegate("tr","mousemove",function(e){
+      var top=originTrPosition.top+(e.pageY-originEventPosition.top),
+          left=originTrPosition.left+(e.pageX-originEventPosition.left);
+
+      if(dragTr.data("isDragable")){
+        $("#dragTable").css({left:left+"px",top:top+"px",background:"#f1f1f1",opacity:0.5,cursor:"pointer"});
+        //拖动
+        if(top<heightList[0]){
+          target=0;
+        }else if(top>heightList[heightList.length-1]){
+          target=heightList.length;
+        }else{
+          for(var i=0,len=heightList.length;i<len;i++){
+            if(heightList[i]<top&&top<(heightList[i+1]||10000)){
+              target=i+1;
+              break;
+            }
+          }
+        }
+
+        if(current!==target){
+          moveTr(current,target);
+        }
+        return false;
+      }
+    }).delegate("tr","mouseup",function(e){
+      if(current!==target){
+        moveTr(current,target);
+      }
+      $("#dragTable").hide();
+      dragTr.data("isDragable",false).css("visibility","");
+      return false;
+    })
+
+    function moveTr(cur,target){
+      if(target>cur){//折么好长时间啊
+        $table.find("tbody tr").eq(target).after(dragTr);
+      }else{
+        $table.find("tbody tr").eq(target).before(dragTr);
+      }
+      current=target;
+    }
+  }
+  tableDragAndSort($(".portfolio"));
+
+
+  </script>
+</body>
+</html>
