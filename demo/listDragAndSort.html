@@ -5,92 +5,127 @@
 	<title></title>
 
 	<style type="text/css">
-		.drag{
+		.drag,#dragList ul{
 			list-style:none;
-      position:relative;
       height:30px
 
 		}
-		.drag li{
+		.drag li,#dragList li{
 			
 			float:left;
 			border:1px solid #f1f1f1;
 			margin-right:5px;
 			padding:5px 5px;
-		}
+      display:inline-block;
+      }
+    #dragList li{
+      float:none;
+    }
+    #dragList{
+      position:absolute;
+      display:none;
+			border:1px solid #f1f1f1;
+			padding:5px 5px;
+    }
 	</style>
-	<script type="text/javascript" src="./jquery.js"></script>
+	<script type="text/javascript" src="../static/js/lib/jquery.js"></script>
 </head>
 <body>
-	<ul class="drag">
-		<li sort='1'>s1</li>
-		<li sort='2'>s2</li>
-		<li sort='3'>s3</li>
-		<li sort='4'>s4</li>
-		<li sort='5'>s5</li>
-	</ul>
+  <div class="tab">
+    <ul class="drag">
+      <li sort='1' width="30px">s1ssdfsdfsdfsfds</li>
+      <li sort='2' width="45px">s2sssssss</li>
+      <li sort='3' width="25px">saaasdfsd3</li>
+      <li sort='4' width="39px">s4</li>
+      <li sort='5' width="37px">s5bbbbbbbbbbbbbbbbbbbbbbbbb</li>
+    </ul>
+  </div>
 	<script type="text/javascript">
-    var draging=false;
 
-    function caculateWidth(){
-      var width=[],
-          sumWidth=0;
-      $.each($(".drag li"),function(key,val){
-        if($(this).css("position")!=="absolute"){
-          width.push(sumWidth);
-          sumWidth+=$(this).outerWidth(true);
-        }  
-      })
-      return width;
-    }
+    function listDragAndSort($list,callback){
+      var originEventPosition={},
+        originTrPosition={},
+        dragLi,
+        listLeft=$list.offset().left,
+        current,target,
+        liList=$list.find("li");
 
-    function caculatePosition(curPosition){
-      var firstIndex=$(".drag li").eq(0).css("position")==="absolute"?1:0,
-          oriPosition=$(".drag li").eq(firstIndex).offset(),
-          height=$(".drag").height();
 
-      if(curPosition.top+height>oriPosition.top&&curPosition.top<oriPosition.top+height){
-        var width=caculateWidth(),
-            curOffset=curPosition.left-oriPosition.left;
+    $list.delegate("li","mousedown",function(e){
+      var li=$(this);
+      originEventPosition={left:e.pageX,top:e.pageY};//初始事件位置
+      originTrPosition={left:li.offset().left,top:li.offset().top};//初始行位置
+      dragLi=li;
+      current=li.prevAll().length;//当前index
+      
+      li.data("isDragable",true).css("visibility","hidden");
+      $("#dragList").css({"top":(li.offset().top)+"px","left":(li.offset().left)+"px",width:li.outerWidth()+"px"}).html(li.html());//确保dragTable的表格样式和当前表格一样
+      $("#dragList").show();
+      console.log($("#dragList").offset().top);
 
-        for(var i=0,l=width.length;i<l;i++){
-          if(curOffset>width[i]&&curOffset<(width[i+1]||100000)){
-            return i;
-          }
-          if(curOffset<0){
-            return -1;
-          }
-        }    
-      }else{
-        return false;
-      }
-    }
+      $("body").bind("mousemove",function(e){
+        var top=originTrPosition.top+(e.pageY-originEventPosition.top),
+            left=originTrPosition.left+(e.pageX-originEventPosition.left),
+            widthList=[],
+            oriLeft=originTrPosition.left,
+            list=$list.find("li");
 
-		$(".drag").delegate("li","mousedown",function(e){
-      draging=true;
-      $(this).unbind().mousemove(function(e){
-        if(!draging) return false;
-        var left = event.clientX-25,  
-            top = event.clientY-25;  
-        $(this).css({position:"absolute",background:"yellow"});
-        $(this).css('left',left+'px').css('top',top+'px'); 
-      }).mouseup(function(e){
-        var insertIndex=caculatePosition($(this).offset());
+        for(var i=0,len=list.length-1;i<len;i++){
+          oriLeft+=list.eq(i).outerWidth();
+          widthList.push(oriLeft);
+        }
 
-        if(typeof insertIndex ==="number"){
-          var li=$("<li></li>").html($(this).html()); 
-          $(this).remove();
-          if(insertIndex<0){
-            $(".drag li").eq(0).before(li);            
+        if(dragLi.data("isDragable")){
+          $("#dragList").css({left:left+"px",top:top+"px",background:"red",opacity:0.5,cursor:"pointer"});
+          //拖动
+
+          if(left<widthList[0]){
+            target=0;
+          }else if(left>widthList[widthList.length-1]){
+            target=widthList.length;
           }else{
-            $(".drag li").eq(insertIndex).after(li);
+            for(var i=0,len=widthList.length;i<len;i++){
+              if(widthList[i]<left&&left<(widthList[i+1]||10000)){
+                target=i+1;
+                break;
+              }
+            }
           }
-        }else{ 
-          $(this).css({position:"static"});  
-        }  
-        draging=false; 
+
+          if(current!==target){
+            moveTr(current,target);
+          }
+          return false;
+        }
       })
+      $("#dragList").bind("mouseup",function(e){
+        if(current!==target){
+          moveTr(current,target);
+        }
+        $("#dragList").hide();
+        dragLi.data("isDragable",false).css("visibility","");
+        $("body").unbind("mousemove");
+        return false;
+      })
+      return false;
     })
+
+    if(!$("#dragList").length){
+      $("body").append('<div id="dragList"></div>');
+    }
+
+
+
+    function moveTr(cur,target){
+      if(target>cur){//折么好长时间啊
+        $list.find("li").eq(target).after(dragLi);
+      }else{
+        $list.find("li").eq(target).before(dragLi);
+      }
+      current=target;
+    }
+  }
+  listDragAndSort($(".drag"));
 	</script>	
 </body>
 </html>
