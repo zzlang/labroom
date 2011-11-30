@@ -1,0 +1,96 @@
+<!DOCTYPE HTML>
+<html lang="en-US">
+<head>
+	<meta charset="UTF-8">
+	<title></title>
+
+	<style type="text/css">
+		.drag{
+			list-style:none;
+      position:relative;
+      height:30px
+
+		}
+		.drag li{
+			
+			float:left;
+			border:1px solid #f1f1f1;
+			margin-right:5px;
+			padding:5px 5px;
+		}
+	</style>
+	<script type="text/javascript" src="./jquery.js"></script>
+</head>
+<body>
+	<ul class="drag">
+		<li sort='1'>s1</li>
+		<li sort='2'>s2</li>
+		<li sort='3'>s3</li>
+		<li sort='4'>s4</li>
+		<li sort='5'>s5</li>
+	</ul>
+	<script type="text/javascript">
+    var draging=false;
+
+    function caculateWidth(){
+      var width=[],
+          sumWidth=0;
+      $.each($(".drag li"),function(key,val){
+        if($(this).css("position")!=="absolute"){
+          width.push(sumWidth);
+          sumWidth+=$(this).outerWidth(true);
+        }  
+      })
+      return width;
+    }
+
+    function caculatePosition(curPosition){
+      var firstIndex=$(".drag li").eq(0).css("position")==="absolute"?1:0,
+          oriPosition=$(".drag li").eq(firstIndex).offset(),
+          height=$(".drag").height();
+
+      if(curPosition.top+height>oriPosition.top&&curPosition.top<oriPosition.top+height){
+        var width=caculateWidth(),
+            curOffset=curPosition.left-oriPosition.left;
+
+        for(var i=0,l=width.length;i<l;i++){
+          if(curOffset>width[i]&&curOffset<(width[i+1]||100000)){
+            return i;
+          }
+          if(curOffset<0){
+            return -1;
+          }
+        }    
+      }else{
+        return false;
+      }
+    }
+
+		$(".drag").delegate("li","mousedown",function(e){
+      draging=true;
+      $(this).unbind().mousemove(function(e){
+        if(!draging) return false;
+        var left = event.clientX-25,  
+            top = event.clientY-25;  
+        $(this).css({position:"absolute",background:"yellow"});
+        $(this).css('left',left+'px').css('top',top+'px'); 
+      }).mouseup(function(e){
+        var insertIndex=caculatePosition($(this).offset());
+
+        if(typeof insertIndex ==="number"){
+          var li=$("<li></li>").html($(this).html()); 
+          $(this).remove();
+          if(insertIndex<0){
+            $(".drag li").eq(0).before(li);            
+          }else{
+            $(".drag li").eq(insertIndex).after(li);
+          }
+        }else{ 
+          $(this).css({position:"static"});  
+        }  
+        draging=false; 
+      })
+    })
+	</script>	
+</body>
+</html>
