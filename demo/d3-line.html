@@ -1,0 +1,94 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+	<!--<meta http-equiv="cache-control" content="no-cache" />
+	<meta http-equiv="pragma" content="no-cache" />
+	<meta http-equiv="expires" content="0" />-->
+	<title>Tutorial: introduction to D3</title>
+	<script type="text/javascript" src="http://janwillemtulp.com/d3linechart/d3-v1.8.2.js"></script>
+	<style type="text/css">
+		path {
+		    stroke: steelblue;
+		    stroke-width: 2;
+		    fill: none;
+		}
+
+		line {
+		    stroke: black;
+		}
+
+		text {
+		    font-family: Arial;
+		    font-size: 9pt;
+		}
+	</style>
+	<script type="text/javascript">
+	  var _gaq = _gaq || [];
+	  _gaq.push(['_setAccount', 'UA-7015427-2']);
+	  _gaq.push(['_trackPageview']);
+
+	  (function() {
+		var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+		ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+		var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+	  })();
+
+	</script>
+  </head>
+  <body>
+  <script type="text/javascript">
+  	var x=d3.scale.linear().domain([0,10]).range([0,400]),
+  		y=d3.scale.linear().domain([0,1]).range([0,50]),
+  		groupHeight=60,
+  		topMargin=100;
+
+  	var data=[];
+  	d3.range(10).forEach(function(d){data.push(Math.random())});
+  	
+  	var interpolations = [
+	    "linear",
+	    "step-before",
+	    "step-after",
+	    "basis",
+	    "basis-closed",
+	    "cardinal",
+	    "cardinal-closed"];
+
+	function getLine(interpolation){
+		return d3.svg.line().x(function(d,i){
+			return x(i);
+		}).y(function(d){
+			return y(d);
+		}).interpolate(interpolation);
+	}    
+
+	var vis=d3.select("body")
+		.append("svg:svg")
+		.attr("class","vis")
+		.attr("width",window.width)
+		.attr("height",window.height);
+
+	var lg=vis.selectAll(".lineGroup")
+		.data(interpolations)
+		.enter().append("svg:g")
+		.attr("class","lineGroup")
+		.attr("transform",function(d,i){
+			return "translate(100," + (topMargin + i * groupHeight) + ")" ;
+		}).each(drawLine);	
+
+	function drawLine(p,j) {
+	    d3.select(this)
+	        .selectAll(".lineGroup")
+	        .data(data)
+	        .enter().append("svg:path")
+	        .attr("d", getLine(p)(data))
+	        .attr("fill", "none")
+	        .attr("stroke", "steelblue")
+	        .attr("stroke-width", 3)
+	        //.attr("stroke-dasharray", "15 5")
+	}	
+  	console.log(data);	
+  </script>
+  </body>
+</html>

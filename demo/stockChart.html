@@ -1,0 +1,79 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+	<title>Stock Chart</title>
+	<script type="text/javascript" src="/static/js/lib/d3.js"></script>
+	<style type="text/css">
+		path {
+		    stroke: steelblue;
+		    stroke-width: 2;
+		    fill: none;
+		}
+
+		line {
+		    stroke: black;
+		}
+
+		text {
+		    font-family: Arial;
+		    font-size: 9pt;
+		}
+	</style>
+  </head>
+  <body>
+  <script type="text/javascript">
+  	var x=d3.scale.linear().domain([0,10]).range([0,400]),
+  		y=d3.scale.linear().domain([0,1]).range([0,50]),
+  		groupHeight=60,
+  		topMargin=100;
+
+  	var data=[];
+  	d3.range(10).forEach(function(d){data.push(Math.random())});
+  	
+  	var interpolations = [
+	    "linear",
+	    "step-before",
+	    "step-after",
+	    "basis",
+	    "basis-closed",
+	    "cardinal",
+	    "cardinal-closed"];
+
+	function getLine(interpolation){
+		return d3.svg.line().x(function(d,i){
+			return x(i);
+		}).y(function(d){
+			return y(d);
+		}).interpolate(interpolation);
+	}    
+
+	var vis=d3.select("body")
+		.append("svg:svg")
+		.attr("class","vis")
+		.attr("width",window.width)
+		.attr("height",window.height);
+
+	var lg=vis.selectAll(".lineGroup")
+		.data(interpolations)
+		.enter().append("svg:g")
+		.attr("class","lineGroup")
+		.attr("transform",function(d,i){
+			return "translate(100," + (topMargin + i * groupHeight) + ")" ;
+		}).each(drawLine);	
+
+	function drawLine(p,j) {
+	    d3.select(this)
+	        .selectAll(".lineGroup")
+	        .data(data)
+	        .enter().append("svg:path")
+	        .attr("d", getLine(p)(data))
+	        .attr("fill", "none")
+	        .attr("stroke", "steelblue")
+	        .attr("stroke-width", 3)
+	        //.attr("stroke-dasharray", "15 5")
+	}	
+  	console.log(data);	
+  </script>
+  </body>
+</html>
