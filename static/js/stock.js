@@ -5,7 +5,7 @@ $(function(){
       topgutter=2,
       topHeiht=206,
       title="NTES",
-      pCount=50;
+      pCount=150;
 
   var r=new Raphael("stock",width,height); 
   function generateData(currentBase,timeBase,columnBase,num){
@@ -86,26 +86,41 @@ $(function(){
       bgPath=bgPath.concat([dataX[i],dataY[i]]);
       bgPath.push("L");
     }
-    var x=dataX[i]-rectWidth/2;
-    var rect=r.rect(x,topgutter,rectWidth,topHeiht);
-    rect.x=x;
-    var tempLine;
-    rect.hover(function(){
-      //alert("123");
-      var x=this.x;
-      console.log(x);
-      tempLine=r.path(["M",x,topgutter,"L",x,topHeiht]);
-    },function(){
-      if(tempLine){
-        tempLine.remove();
-      }
-    })
-    rects.push[rect];
+
+    rects.push(rect); 
   }
-  //stockPath.push("Z");
+  //draw the quote line and background line
   r.path(stockPath);
   r.path(bgPath).attr({stroke: "none", opacity: .3, fill: "green"});
   var yTick=topHeiht/7;
+  //draw rect to emit event
+  for(var i=0;i<pCount;i++){
+    var x=dataX[i]-rectWidth/2;
+    var orignX=dataX[i];
+    var orignY=dataY[i];
+
+    var rect=r.rect(x,topgutter,rectWidth,topHeiht).attr({"stroke":"none",fill:"#fff",opacity:0});
+    rect.toFront();
+    rect.x=x;
+    var tempLine,
+        tempCircle;
+
+    (function(orignX,orignY){
+      rect.hover(function(){
+        var x=this.x;
+        console.log(x);
+        tempLine=r.path(["M",orignX,topgutter,"L",orignX,topHeiht]);
+        tempCircle=r.circle(orignX,orignY,"10");
+      },function(){
+        if(tempLine){
+          tempLine.remove();
+          tempCircle.remove();
+        }
+      })
+
+    })(orignX,orignY)
+  }
+
   //y-lab
   for(var i=0;i<dataRowCount;i++){
     var dataLine=(dataStart+i*dataTick).toFixed(2);
