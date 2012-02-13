@@ -2,7 +2,17 @@ html
   head
     title index
   body
-    testtest
-  script
-    alert(SNB.data.hei);
-    
+    #stock
+    script(src='/socket.io/socket.io.js')
+    script(src='/static/js/lib/jquery.js')
+    script(src='/static/js/lib/raphael.js')
+    script(src='/static/js/lib/d3.js')
+    script(src='/static/js/lib/underscore.js')
+    script(src='/static/js/stock.js')
+    script
+      var socket = io.connect('http://127.0.0.1:4444');
+      socket.on('news', function (data) {
+        console.log(data);
+        socket.emit('my other event', { my: 'data' });
+      });
+

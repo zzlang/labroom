@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <title>Raphael Demo</title>
+  <script type="text/javascript" src="/static/js/lib/raphael.js"></script>
+  </head>
+  <body>
+    <div id="holder"></div>
+    <div id="test"></div>
+    <script type="text/javascript">
+      Raphael.fn.drawGrid=function(x,y,w,h,wv,hv,color){
+        color=color||"#000";
+        var path=["M",Math.round(x) + .5, Math.round(y) + .5, "L", Math.round(x + w) + .5, Math.round(y) + .5, Math.round(x + w) + .5, Math.round(y + h) + .5, Math.round(x) + .5, Math.round(y + h) + .5, Math.round(x) + .5, Math.round(y) + .5],
+          rowHeight=h/hv,
+          columnWidth=w/wv;
+        
+        for(var i=1;i<hv;i++){
+          path=path.concat(["M",Math.round(x)+.5,Math.round(y+i*rowHeight)+.5,"H",Math.round(x+w)+.5]);
+        }  
+        for(var i=1;i<wv;i++){
+          path=path.concat(["M",Math.round(x+i*columnWidth)+.5,Math.round(y)+.5,"v",Math.round(y+h)+.5]);
+        }
+        return this.path(path.join(",")).attr({stoke:color});
+      }
+      var paper=new Raphael("holder",600,600);
+      paper.drawGrid(0,0,500,300,10,20);
+
+      var p2=new Raphael("test",500,500);
+
+      p2.path(["M",50,50,"R",260,60,300,75,20,20,38,73,"Z"]).attr({stoke:"#000"});
+    </script>
+  
+  </body>
+</html>

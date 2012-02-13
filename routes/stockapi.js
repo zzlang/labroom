@@ -6,4 +6,9 @@ module.exports=function(app){
       console.log(data);
     })
   })
+
+  app.get("/stockapi",function(req,res,next){
+    app.set("view engine","jade");
+    res.render("index",{layout:false}); 
+  })
 }
