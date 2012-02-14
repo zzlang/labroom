@@ -5,7 +5,9 @@ $(function(){
       topgutter=2,
       topHeiht=206,
       title="NTES",
-      pCount=150;
+      pCount=50,
+      chartWidth=517,
+      timeCount=100;
 
   var r=new Raphael("stock",width,height); 
   function generateData(currentBase,timeBase,columnBase,num){
@@ -25,11 +27,15 @@ $(function(){
         tEnd=target.end||1000;
 
     return function(array){
-      var newArray=[];
-      for(var i=0,ii=array.length;i<ii;i++){
-        newArray[i]=(array[i]-sStart)*(tEnd-tStart)/(sEnd-sStart)+tStart;
+      if(Object.prototype.toString.call(array)==="[object Array]"){
+        var newArray=[];
+        for(var i=0,ii=array.length;i<ii;i++){
+          newArray[i]=(array[i]-sStart)*(tEnd-tStart)/(sEnd-sStart)+tStart;
+        }
+        return newArray;
+      }else{
+        return (array-sStart)*(tEnd-tStart)/(sEnd-sStart)+tStart; 
       }
-      return newArray;
     }    
   }
 
@@ -56,7 +62,7 @@ $(function(){
   
   var dataY= range({start:dataStart,end:dataEnd},{start:topgutter,end:topgutter+topHeiht})(datas);
   var dataX=[],
-      xLength=518/pCount;
+      xLength=518/timeCount;
   for(var i=0;i<pCount;i++){
     dataX.push(41+i*xLength);
   }
@@ -64,72 +70,142 @@ $(function(){
 
 
   //rect
-  r.path("M40 2L557 2 557 208 40 208Z").attr({"stroke":"#000","stroke-width":"0.5px"});
-  r.path("M40 215L557 215 557 291 40 291Z").attr({"stroke":"#000","stroke-width":"0.5px"});
+  function drawOutRect(){
+    r.path("M40 2L557 2 557 208 40 208Z").attr({"stroke":"#000","stroke-width":"0.5px"});
+    r.path("M40 215L557 215 557 291 40 291Z").attr({"stroke":"#000","stroke-width":"0.5px"});
+  }
+  drawOutRect();
+
+  var isAmendY=false;
   //quote line
-  var stockPath=["M"],
-      bgPath=["M"],
-      rects=[],
-      rectWidth=517/pCount;
-  for(var i=0;i<pCount;i++){
-    if(i){
-      stockPath=stockPath.concat([dataX[i],dataY[i]]);
-      bgPath=bgPath.concat([dataX[i],dataY[i]]);
-      if(i==pCount-1){
-        console.log(dataX[i]);
-        bgPath=bgPath.concat([dataX[i],"208","40","208","Z"])
+
+  function generatePath(dataX,dataY){
+    var path={};
+    var stockPath=["M"],
+    bgPath=["M"],
+    rects=[];
+    for(var i=0,ii=dataX.length;i<ii;i++){
+      if(!isAmendY){
+        dataY[i]=topHeiht+topgutter+1-dataY[i];
+        isAmendY=true;
       }
-
-    }else{
-      stockPath=stockPath.concat([dataX[i],dataY[i]]);
-      stockPath.push("L");
-      bgPath=bgPath.concat([dataX[i],dataY[i]]);
-      bgPath.push("L");
-    }
-
-    rects.push(rect); 
-  }
-  //draw the quote line and background line
-  r.path(stockPath);
-  r.path(bgPath).attr({stroke: "none", opacity: .3, fill: "green"});
-  var yTick=topHeiht/7;
-  //draw rect to emit event
-  for(var i=0;i<pCount;i++){
-    var x=dataX[i]-rectWidth/2;
-    var orignX=dataX[i];
-    var orignY=dataY[i];
-
-    var rect=r.rect(x,topgutter,rectWidth,topHeiht).attr({"stroke":"none",fill:"#fff",opacity:0});
-    rect.toFront();
-    rect.x=x;
-    var tempLine,
-        tempCircle;
-
-    (function(orignX,orignY){
-      rect.hover(function(){
-        var x=this.x;
-        console.log(x);
-        tempLine=r.path(["M",orignX,topgutter,"L",orignX,topHeiht]);
-        tempCircle=r.circle(orignX,orignY,"10");
-      },function(){
-        if(tempLine){
-          tempLine.remove();
-          tempCircle.remove();
+      if(i){
+        stockPath=stockPath.concat([dataX[i],dataY[i]]);
+        bgPath=bgPath.concat([dataX[i],dataY[i]]);
+        if(i==dataY.length-1){
+          bgPath=bgPath.concat([dataX[i],"208","40","208","Z"])
         }
-      })
 
-    })(orignX,orignY)
+      }else{
+        stockPath=stockPath.concat([dataX[i],dataY[i]]);
+        stockPath.push("L");
+        bgPath=bgPath.concat([dataX[i],dataY[i]]);
+        bgPath.push("L");
+      }
+    }
+    path.stockPath=stockPath;
+    path.bgPath=bgPath;
+    return path;
   }
 
-  //y-lab
+
+
+        //y-lab
+  var yTick=topHeiht/7;
   for(var i=0;i<dataRowCount;i++){
     var dataLine=(dataStart+i*dataTick).toFixed(2);
 
     var labY=(topgutter+topHeiht-1)-yTick*i;
 
-    r.text(leftgutter-20,labY,dataLine).attr({font: '12px Helvetica, Arial', fill: "#000"});
-    r.path(["M",leftgutter,labY,"L",leftgutter+5,labY]);
+    r.text(leftgutter-20,labY,dataLine).attr({font: '12px Helvetica, Arial', fill: "#666",color:"#666"});
+    if(i){
+      r.path(["M",leftgutter,labY,"L",leftgutter+517,labY]).attr({"stroke-dasharray":".",stroke:"#e3e3e3"});
+    }
   }
+
+  //draw the quote line and background line
+  var path=generatePath(dataX,dataY);
+
+  drawQuoteLine(path);
+
+
+
+  //draw rect to emit event
+  for(var i=0;i<pCount;i++){
+    var orignX=dataX[i];
+    var orignY=dataY[i];
+    var data=dataList[i];
+
+    hoverEvent(orignX,orignY,data,r);
+  }
+  function hoverEvent(orignX,orignY,data,r){
+    var rectWidth=517/timeCount;
+    var x=orignX-rectWidth/2;
+    var rect=r.rect(x,topgutter,rectWidth,topHeiht).attr({"stroke":"none",fill:"#fff",opacity:0});
+    rect.toFront();
+    var tempLine,
+        tempCircle,
+        tempRect,
+        tempText;
+
+    (function(orignX,orignY,data){
+      rect.hover(function(){
+        tempLine=r.path(["M",orignX,topgutter,"L",orignX,topHeiht]).attr({"stroke":"#c0c0c0"});
+        tempCircle=r.circle(orignX,orignY,"3").attr({"stroke-width":"1",stroke:"#fff",fill:"#4572A7"});
+        var tipWidth=50,
+            tipHeight=20,
+            rectX,
+            rectY;
+
+        if(chartWidth+leftgutter-orignX<tipWidth+2){
+          rectX=orignX-5-tipWidth;
+        }else{
+          rectX=orignX+5;
+        } 
+        rectY=orignY-5;
+        tempRect=r.rect(rectX,rectY,50,20,3).attr({"stroke-width":"1",stroke:"#4572A7"});
+        tempText=r.text(rectX+14,rectY+7,data.current).attr({font: '10px Helvetica, Arial', fill: "#666",color:"#666"});
+      },function(){
+        if(tempLine){
+          tempLine.remove();
+          tempCircle.remove();
+          tempRect.remove();
+          tempText.remove();
+        }
+      })
+
+    })(orignX,orignY,data)
+  }
+
+  var stockLine,
+      bgLine;
+  function drawQuoteLine(path){
+    stockLine=r.path(path.stockPath).attr({stroke:"#4572A7","stroke-width":"2"});
+    bgLine=r.path(path.bgPath).attr({stroke: "none", fill: "#f4f4ff",opacity:".7"});
+  }
+
+  function addPoint(){
+    var newPoint=generateData(40,Date.now(),2000,1)[0];
+    dataY.push(range({start:dataStart,end:dataEnd},{start:topgutter,end:topgutter+topHeiht})(newPoint.current));
+    dataX.push(41+dataX.length*xLength);
+    path=generatePath(dataX,dataY);
+
+    var tempShineCircle=r.circle(dataX[dataX.length-1],dataY[dataY.length-1],"2").attr({"stroke":"#4572A7","fill":"#4572A7"}).toFront();
+    var anim=stockLine.animate({path:path.stockPath},1000,function(){
+      tempShineCircle.remove();
+      bgLine.animate({path:path.bgPath},0);
+    });
+    hoverEvent(dataX[dataX.length-1],dataY[dataY.length-1],newPoint,r);
+  }
+
+  setInterval(addPoint,5000);
+
+  function drawTimeLine(){
+    
+
+  }
+
+
   //tip on quote line
 
 
