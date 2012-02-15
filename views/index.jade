@@ -1,6 +1,13 @@
 html
   head
     title index
+    style
+      #stock{
+        margin:200 auto;
+        background:#f1f1f1;
+        width:800px;
+        height:500px;
+      }
   body
     #stock
     script(src='/socket.io/socket.io.js')
@@ -8,7 +15,8 @@ html
     script(src='/static/js/lib/raphael.js')
     script(src='/static/js/lib/d3.js')
     script(src='/static/js/lib/underscore.js')
-    script(src='/static/js/stock.js')
+    script(src='/static/js/lib/backbone.js')
+    script(src='/static/js/stockChart.js')
     script
       var socket = io.connect('http://127.0.0.1:4444');
       socket.on('news', function (data) {
