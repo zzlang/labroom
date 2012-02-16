@@ -46,7 +46,7 @@ var SNB={};
         "10y":"10nian"
       },//1d 5d 1m
       stockType:"$Stock",//stock type --a-stock||hk-stock||$stock
-      symbol:"GOOG",
+      symbol:"AAPL",
       period:"1d",//chartType
       apiKey:"47bce5c74f",
       dayPointsCount_AStock:30*4-2,//a-stock open time: 9:30AM-11:30AM 1:00PM-3:00PM  total 4hours,delete the same point 11:30AM and 1:00PM ,then 4*30-1.
@@ -56,7 +56,9 @@ var SNB={};
 
     this.options=options=$.extend(defaultOptions,options);
     this.canvas=new Raphael(options.container,options.width,options.height);
-
+    if(window.location.hash){
+      this.options.symbol=window.location.hash.substr(1);
+    }
     var that=this;
     this.getData(function(data){
       that.render(data);
@@ -349,6 +351,11 @@ var SNB={};
             tempVText;
 
         (function(orignX,orignY,vx,vy,data){
+          rect.click(function(){
+            if(tempCircle){
+              tempCircle.animate({fill:"red"},1000);
+            }
+          })
           rect.hover(function(){
             tempLine=r.path(["M",orignX,tg,"L",orignX,qh+qvs+vh]).attr({"stroke":"#c0c0c0"});
             tempCircle=r.circle(orignX,orignY,"3").attr({"stroke-width":"1",stroke:"#fff",fill:"#4572A7"});
