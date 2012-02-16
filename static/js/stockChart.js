@@ -1,8 +1,6 @@
+var SNB={};
 (function($,undefined){
-  if(!SNB){
-    SNB={};
-  }
-
+  window.SNB=SNB||{};
   if(!SNB.Models){
     SNB.Models={};
   }
@@ -26,13 +24,16 @@
       quote:{
         quoteHeight:206,
         quoteWidth:517,
-        quoteBlanks:7
+        quoteBlanks:7,
+        pathAttr:{"stroke":"#000","stroke-width":"0.5px"}
       },
       volume:{
         volumeWidth:517,
         volumeHeight:76,
-        volumeBlanks:4
-      }
+        volumeBlanks:4,
+        pathAttr:{"stroke":"#000","stroke-width":"0.5px"}
+      },
+      quote_volume_space:10,//the space of quote and volume rect.
       dataUrl:"http://api.xueqiu.com/stock/forchart/stocklist.json",
       chartType:{
         "1d":"rifenshitu",
@@ -44,13 +45,13 @@
         "5y":"5nian",
         "10y":"10nian"
       },//1d 5d 1m
-      stockType:"",//stock type --a-stock||hk-stock||$stock
-      symbol:"",
-      period:"",//chartType
+      stockType:"$Stock",//stock type --a-stock||hk-stock||$stock
+      symbol:"GOOG",
+      period:"1d",//chartType
       apiKey:"47bce5c74f",
-      dayPointsCount_AStock:30*4-2//a-stock open time: 9:30AM-11:30AM 1:00PM-3:00PM  total 4hours,delete the same point 11:30AM and 1:00PM ,then 4*30-1.
-      dayPointsCount_HKStock:30*5-2//hk-stock open time :9:30AM-12:00AM 1:30PM-4:00PM
-      dayPointsCount_$Stock:30*6.5-1//$-stock open time: 9:30AM-4:00PM
+      dayPointsCount_AStock:30*4-2,//a-stock open time: 9:30AM-11:30AM 1:00PM-3:00PM  total 4hours,delete the same point 11:30AM and 1:00PM ,then 4*30-1.
+      dayPointsCount_HKStock:30*5-2,//hk-stock open time :9:30AM-12:00AM 1:30PM-4:00PM
+      dayPointsCount_$Stock:30*6.5//$-stock open time: 9:30AM-4:00PM
     }
 
     this.options=options=$.extend(defaultOptions,options);
@@ -58,7 +59,7 @@
 
     var that=this;
     this.getData(function(data){
-      that.render();
+      that.render(data);
     })
   }
 
@@ -77,107 +78,211 @@
     },
     wrapData:function(dataList){
       var dataObj={},
-          options=this.options;
+          options=this.options,
+          lg=options.leftGutter,
+          tg=options.topGutter,
+          qw=options.quote.quoteWidth,
+          qh=options.quote.quoteHeight,
+          vw=options.volume.volumeWidth,
+          vh=options.volume.volumeHeight,
+          that=this;
 
       dataObj.dataList=dataList;
-      dataObj.datas=_.pluck(dataList,"current");
-      dataObj.times=_.pluck(dataList,"time");
-      dataObj.volumes=_.pluck(dataList,"volume");
-      dataObj.maxData=+Math.max.apply(Math,dataObj.datas);
-      dataObj.minData=+Math.min.apply(Math,dataObj.datas);
-
-      dataObj.maxColumn=+Math.max.apply(Math,dataObj.columns);
-      dataObj.minColumn=+Math.min.apply(Math,dataObj.columns); 
-
-      var dataGap=(dataObj.maxData-dataObj.minData),
-          tempObj=convert(dataGap),
-          baseNum=Math.ceil(tempObj.mantissa),
-          exponent=tempObj.exponent;
-
-      var tick;
-
-      if(baseNum<4){
-        tick=0.5;
-      }else if(baseNum<8){
-        tick=1;
-      }else{
-        tick=2;
-      }
-
-      tick=tick*Math.pow(10,exponent);
-
-      var dataStart=Math.floor(minData/tick)*tick;
-      var dataEnd=Math.ceil(maxData/tick)*tick;
 
       var xAxes=[],pCount;//range time ba
 
-
       if(options.period==="1d"){
-        pCount=options["dayPointsCount_"+options.stockType];
-        xGap=options.quote.quoteWidth/pCount;
+        pCount=dataObj.pCount=options["dayPointsCount_"+options.stockType];
+        var xGap=qw/pCount;
         for(var i=0;i<pCount;i++){
-          xAxes.push(options.leftGutter+i*xGap);
+          xAxes.push(lg+i*xGap);
         }
       }else{
         //range the timeList
       }
 
-      dataObj.quoteXAxes=xAxes;
-      dataObj.quoteYAxes=this.range({start:dataStart,end:dataEnd},{start:options.topGutter,end:topGutter+quoteHeight})(dataObj.datas);
+      xAxes.push(lg+qw);
+
+
+      function reflectData(dataType,start,end){//dataType--current||volume
+        var datas=_.pluck(dataList,dataType),
+            maxData=+Math.max.apply(Math,datas),
+            minData=+Math.min.apply(Math,datas),
+            dataGap=maxData-minData,
+            tempObj=that.convert(dataGap),
+            baseNum=Math.ceil(tempObj.mantissa),
+            exponent=tempObj.exponent;
+            
+        var tick=getTick(baseNum)*Math.pow(10,exponent),    
+            dataStart=Math.floor(minData/tick)*tick,
+            dataEnd=Math.ceil(maxData/tick)*tick+tick;
+
+        var yLabels=[dataStart],
+            tempStart=dataStart,
+            isQuote;  
+
+        while(tempStart<dataEnd){
+          tempStart+=tick;
+          yLabels.push(tempStart);
+
+        }
+        var yLabelTick,yStartYAxis;
+        
+        if(dataType=="current"){
+          yLabelTick=qh/(yLabels.length-1);
+          yStartYAxis=tg+qh;
+          isQuote=true;
+        }else{
+          yLabelTick=vh/(yLabels.length-1);
+          yStartYAxis=tg+qh+options.quote_volume_space+vh;
+        }
+        yLabelObjs=[];
+        for(var i=0,ii=yLabels.length;i<ii;i++){
+          var text;
+          if(dataType=="volume"){
+            var unit,last,newLabel=that.convert(yLabels[i]),exponent=newLabel.exponent;
+            if(exponent>=9){
+              unit="B";
+              last=exponent-9;
+            }else if(exponent>=6){
+              unit="M";
+              last=exponent-6;
+            }else if(exponent>=3){
+              unit="K";
+              last=exponent-3;
+            }else{
+              unit=""
+              last=0;
+            }
+            text=newLabel.mantissa*Math.pow(10,last)+unit;
+          }else{
+            text=yLabels[i];
+          }
+          yLabelObjs.push({yAxis:yStartYAxis-i*yLabelTick,text:text});
+        }    
+
+        var yAxes=that.range({start:dataStart,end:dataEnd},{start:start,end:end},isQuote)(datas);
+        return {xAxes:xAxes,yAxes:yAxes,yLabels:yLabelObjs,datas:datas};
+      }    
+
+      dataObj.times=_.pluck(dataList,"time");
+      function getTick(baseNum){
+        if(baseNum<4){
+          tick=0.5;
+        }else if(baseNum<8){
+          tick=1;
+        }else{
+          tick=2;
+        }
+        return tick;
+      }    
+
+      dataObj.quote=reflectData("current",tg,tg+qh);
+      dataObj.volume=reflectData("volume",0,vh);
       return dataObj;
     },
-    range:function(source,target){//reflect one range of nums to others
+    range:function(source,target,isQuote){//reflect one range of nums to others
       var sStart=source.start||0,
           sEnd=source.end||100,
           tStart=target.start||0,
-          tEnd=target.end||1000;
+          tEnd=target.end||1000,
+          options=this.options;
+
+      var newArray=[],
+          total;
+      
+      if(isQuote){
+        total=options.topGutter+options.quote.quoteHeight+1;
+      }else{
+        total=options.topGutter+options.quote.quoteHeight+options.quote_volume_space+options.volume.volumeHeight;
+      }   
 
       return function(array){
+
         if(Object.prototype.toString.call(array)==="[object Array]"){
-          var newArray=[];
+ 
           for(var i=0,ii=array.length;i<ii;i++){
-            newArray[i]=(array[i]-sStart)*(tEnd-tStart)/(sEnd-sStart)+tStart;
+            newArray[i]=total-((array[i]-sStart)*(tEnd-tStart)/(sEnd-sStart)+tStart);
           }
           return newArray;
         }else{
-          return (array-sStart)*(tEnd-tStart)/(sEnd-sStart)+tStart; 
+          return total-((array-sStart)*(tEnd-tStart)/(sEnd-sStart)+tStart);
         }
       }   
     },
     convert:function(decimal){
-      var correctanswer=parsefloat(decimal);
-      var correctexponent;
-      var correctmantissa;
-      correctexponent=math.floor(math.log(correctanswer)/math.ln10);
-      correctmantissa=correctanswer/math.pow(10,correctexponent);
-
-      return {mantissa:correctmantissa,exponent:correctexponent};
+      if(decimal==0){
+        return {mantissa:0,exponent:0};
+      }
+      var CorrectAnswer=parseFloat(decimal);
+      var CorrectExponent;
+      var CorrectMantissa;
+      CorrectExponent=Math.floor(Math.log(CorrectAnswer)/Math.LN10);
+      CorrectMantissa=CorrectAnswer/Math.pow(10,CorrectExponent);
+      return {mantissa:CorrectMantissa,exponent:CorrectExponent};
     },
     render:function(dataObj){
-      
+      var r=this.canvas;
+      this.drawOutRect();
+      this.drawYLab(dataObj.quote.yLabels);
+      this.drawYLab(dataObj.volume.yLabels);
+      var path=this.generateQuotePath(dataObj.quote.xAxes,dataObj.quote.yAxes);
+      this.drawQuoteLine(path);
+      this.drawVolumeLine(dataObj);
+      this.addEvent(dataObj);
+    },
+    drawVolumeLine:function(dataObj){
+      var xAxes=dataObj.volume.xAxes,
+          yAxes=dataObj.volume.yAxes,
+          datas=dataObj.volume.data,
+          options=this.options,
+          quote=this.options.quote,
+          volume=this.options.volume,
+          endYAxis=options.topGutter+quote.quoteHeight+options.quote_volume_space+volume.volumeHeight,
+          path=[];
+
+      for(var i=0,ii=xAxes.length;i<ii;i++){
+        var xAxis=xAxes[i],
+            yAxis=yAxes[i];
+
+        path=path.concat(["M",xAxis,yAxis,"L",xAxis,endYAxis]);
+      }    
+      this.canvas.path(path);
     },
     drawOutRect:function(){
       var options=this.options,
-          r=this.canvas;
-
-      r.path("M40 2L557 2 557 208 40 208Z").attr({"stroke":"#000","stroke-width":"0.5px"});
-      r.path("M40 215L557 215 557 291 40 291Z").attr({"stroke":"#000","stroke-width":"0.5px"});
+          r=this.canvas,
+          lg=options.leftGutter,
+          tg=options.topGutter,
+          qw=options.quote.quoteWidth,
+          qh=options.quote.quoteHeight,
+          vw=options.volume.volumeWidth,
+          vh=options.volume.volumeHeight,
+          qAttr=options.quote.pathAttr,
+          vAttr=options.volume.pathAttr,
+          qm=options.quote_volume_space,
+          volumeYAxis=tg+qh+qm;
+          quoteRectPath=["M",lg,tg,"L",lg+qw,tg,lg+qw,tg+qh,lg,tg+qh,"Z"],
+          volumeRectPath=["M",lg,volumeYAxis,"L",lg+vw,,volumeYAxis,lg+vw,volumeYAxis+vh,lg,volumeYAxis+vh,"Z"];
+              
+      r.path(quoteRectPath).attr(qAttr);
+      r.path(volumeRectPath).attr(vAttr);
     },
-    generatePath:function(dataX,dataY){
-      var path={};
-      var stockPath=["M"],
-      bgPath=["M"],
-      rects=[];
+    generateQuotePath:function(dataX,dataY){
+      var path={},
+          stockPath=["M"],
+          bgPath=["M"],
+          options=this.options,
+          tg=options.topGutter,
+          lg=options.leftGutter,
+          qh=options.quote.quoteHeight;
+
       for(var i=0,ii=dataX.length;i<ii;i++){
-        if(!isAmendY){
-          dataY[i]=topHeiht+topgutter+1-dataY[i];
-          isAmendY=true;
-        }
         if(i){
           stockPath=stockPath.concat([dataX[i],dataY[i]]);
           bgPath=bgPath.concat([dataX[i],dataY[i]]);
           if(i==dataY.length-1){
-            bgPath=bgPath.concat([dataX[i],"208","40","208","Z"])
+            bgPath=bgPath.concat([dataX[i],tg+qh,lg,tg+qh,"Z"])
           }
 
         }else{
@@ -191,69 +296,90 @@
       path.bgPath=bgPath;
       return path;
     },
-    drawYLab:function(){
-      var yTick=topHeiht/7;
-      for(var i=0;i<dataRowCount;i++){
-        var dataLine=(dataStart+i*dataTick).toFixed(2);
-
-        var labY=(topgutter+topHeiht-1)-yTick*i;
-
-        r.text(leftgutter-20,labY,dataLine).attr({font: '12px Helvetica, Arial', fill: "#666",color:"#666"});
+    drawYLab:function(ylabs){
+      var options=this.options,
+          r=this.canvas;
+      for(var i=0,ii=ylabs.length;i<ii-1;i++){
+        var labY=ylabs[i],text;
+        if(typeof labY.text=="number"){
+          text=labY.text.toFixed(2);
+        }else{
+          text=labY.text;
+        }
+        r.text(options.leftGutter-22,labY.yAxis,text).attr({font: '12px Helvetica, Arial', fill: "#666",color:"#666"});
         if(i){
-          r.path(["M",leftgutter,labY,"L",leftgutter+517,labY]).attr({"stroke-dasharray":".",stroke:"#e3e3e3"});
+          r.path(["M",options.leftGutter,labY.yAxis,"L",options.leftGutter+options.quote.quoteWidth,labY.yAxis]).attr({"stroke-dasharray":".",stroke:"#e3e3e3"});
         }
       }
     },
     drawQuoteLine:function(path){
+      var r=this.canvas;
       stockLine=r.path(path.stockPath).attr({stroke:"#4572A7","stroke-width":"2"});
       bgLine=r.path(path.bgPath).attr({stroke: "none", fill: "#f4f4ff",opacity:".7"});
     },
-    addEvent:function(){
+    drawTimeLine:function(){
+      
+    },
+    addEvent:function(dataObj){
+      var r=this.canvas,
+          options=this.options,
+          quote=options.quote,
+          pCount=dataObj.pCount,
+          tg=options.topGutter,
+          qvs=options.quote_volume_space,
+          vh=options.volume.volumeHeight,
+          qh=quote.quoteHeight;
         //draw rect to emit event
       for(var i=0;i<pCount;i++){
-        var orignX=dataX[i];
-        var orignY=dataY[i];
-        var data=dataList[i];
+        var orignX=dataObj.quote.xAxes[i],
+            orignY=dataObj.quote.yAxes[i],
+            vx=dataObj.volume.xAxes[i],
+            vy=dataObj.volume.yAxes[i],
+            data=dataObj.dataList[i],
 
-        hoverEvent(orignX,orignY,data,r);
-      }
-      function hoverEvent(orignX,orignY,data,r){
-        var rectWidth=517/timeCount;
-        var x=orignX-rectWidth/2;
-        var rect=r.rect(x,topgutter,rectWidth,topHeiht).attr({"stroke":"none",fill:"#fff",opacity:0});
-        rect.toFront();
+            rectWidth=quote.quoteWidth/pCount,
+            x=orignX-rectWidth/2,
+            rect=r.rect(x,tg,rectWidth,qh+qvs+vh).attr({"stroke":"none",fill:"#fff",opacity:0});
+
         var tempLine,
             tempCircle,
             tempRect,
-            tempText;
+            tempText,
+            tempVRect,
+            tempVText;
 
-        (function(orignX,orignY,data){
+        (function(orignX,orignY,vx,vy,data){
           rect.hover(function(){
-            tempLine=r.path(["M",orignX,topgutter,"L",orignX,topHeiht]).attr({"stroke":"#c0c0c0"});
+            tempLine=r.path(["M",orignX,tg,"L",orignX,qh+qvs+vh]).attr({"stroke":"#c0c0c0"});
             tempCircle=r.circle(orignX,orignY,"3").attr({"stroke-width":"1",stroke:"#fff",fill:"#4572A7"});
             var tipWidth=50,
                 tipHeight=20,
                 rectX,
                 rectY;
 
-            if(chartWidth+leftgutter-orignX<tipWidth+2){
+            if(options.quote.quoteWidth+options.leftGutter-orignX<tipWidth+2){
               rectX=orignX-5-tipWidth;
             }else{
               rectX=orignX+5;
             } 
             rectY=orignY-5;
+
             tempRect=r.rect(rectX,rectY,50,20,3).attr({"stroke-width":"1",stroke:"#4572A7"});
-            tempText=r.text(rectX+14,rectY+7,data.current).attr({font: '10px Helvetica, Arial', fill: "#666",color:"#666"});
+            tempVRect=r.rect(rectX,vy-5,50,20,3).attr({"stroke-width":"1",stroke:"#4572A7"});
+            tempText=r.text(rectX+20,rectY+7,data.current).attr({font: '10px Helvetica, Arial', fill: "#666",color:"#666"});
+            tempVText=r.text(rectX+20,vy+7,data.volume).attr({font: '10px Helvetica, Arial', fill: "#666",color:"#666"});
           },function(){
             if(tempLine){
               tempLine.remove();
               tempCircle.remove();
               tempRect.remove();
               tempText.remove();
+              tempVText.remove();
+              tempVRect.remove();
             }
           })
 
-        })(orignX,orignY,data)
+        })(orignX,orignY,vx,vy,data)
       }
     },
     addPoint:function(){
