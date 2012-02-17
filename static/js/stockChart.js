@@ -49,16 +49,17 @@ var SNB={};
       symbol:"AAPL",
       period:"1d",//chartType
       apiKey:"47bce5c74f",
-      dayPointsCount_AStock:30*4-2,//a-stock open time: 9:30AM-11:30AM 1:00PM-3:00PM  total 4hours,delete the same point 11:30AM and 1:00PM ,then 4*30-1.
-      dayPointsCount_HKStock:30*5-2,//hk-stock open time :9:30AM-12:00AM 1:30PM-4:00PM
+      dayPointsCount_AStock:30*4,//a-stock open time: 9:30AM-11:30AM 1:00PM-3:00PM  total 4hours,delete the same point 11:30AM and 1:00PM ,then 4*30-1.
+      dayPointsCount_HKStock:30*5,//hk-stock open time :9:30AM-12:00AM 1:30PM-4:00PM
       dayPointsCount_$Stock:30*6.5//$-stock open time: 9:30AM-4:00PM
     }
 
     this.options=options=$.extend(defaultOptions,options);
     this.canvas=new Raphael(options.container,options.width,options.height);
-    if(window.location.hash){
-      this.options.symbol=window.location.hash.substr(1);
-    }
+    // if(window.location.hash){
+    //   this.options.symbol=window.location.hash.substr(1);
+    // }
+    this.options.stockType=this.getStockType(this.options.symbol).stockType;
     var that=this;
     this.getData(function(data){
       that.render(data);
@@ -69,7 +70,7 @@ var SNB={};
     getData:function(callback){
       var options=this.options,
           that=this;
-      $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:options.chartType},function(ret){
+        $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:options.period},function(ret){
         if(ret.message&&ret.message.code=="0"){
           var datas=ret.chartlist,
               dataObj=that.wrapData(datas);
@@ -89,27 +90,44 @@ var SNB={};
           vh=options.volume.volumeHeight,
           that=this;
 
-      dataObj.dataList=dataList;
+
 
       var xAxes=[],pCount;//range time ba
 
-      if(options.period==="1d"){
-        pCount=dataObj.pCount=options["dayPointsCount_"+options.stockType];
-        var xGap=qw/pCount;
-        for(var i=0;i<pCount;i++){
-          xAxes.push(lg+i*xGap);
-        }
-      }else{
-        //range the timeList
+      pCount=dataObj.pCount=options.period==="1d"?options["dayPointsCount_"+options.stockType]:(dataList.length-1);
+
+      var xGap=qw/pCount;
+      for(var i=0;i<pCount;i++){
+        xAxes.push(lg+i*xGap);
       }
 
       xAxes.push(lg+qw);
 
+      function processData(dataList){// remove the repeating point
+        var stockType=options.stockType;
+        if(stockType!=="$Stock"&&options.period==="1d"){
+          var deleteTime=stockType==="AStock"?"11:30:00":"12:00:00",
+              newDataList=[];
+
+          return _.reject(dataList,function(data){
+            return data.time.indexOf(deleteTime)>-1;
+          })    
+        }else{
+          return dataList;
+        }
+      }
+
+      dataList=processData(dataList);
+      dataObj.dataList=dataList;
+
 
       function reflectData(dataType,start,end){//dataType--current||volume
         var datas=_.pluck(dataList,dataType),
-            maxData=+Math.max.apply(Math,datas),
-            minData=+Math.min.apply(Math,datas),
+            delete0datas=_.reject(datas,function(data){
+              return data==0;
+            }),
+            maxData=+Math.max.apply(Math,delete0datas),
+            minData=+Math.min.apply(Math,delete0datas),
             dataGap=maxData-minData,
             tempObj=that.convert(dataGap),
             baseNum=Math.ceil(tempObj.mantissa),
@@ -228,7 +246,8 @@ var SNB={};
       this.drawOutRect();
       this.drawYLab(dataObj.quote.yLabels);
       this.drawYLab(dataObj.volume.yLabels);
-      var path=this.generateQuotePath(dataObj.quote.xAxes,dataObj.quote.yAxes);
+      this.drawTimeLine(dataObj);
+      var path=this.generateQuotePath(dataObj.quote.xAxes,dataObj.quote.yAxes,dataObj);
       this.drawQuoteLine(path);
       this.drawVolumeLine(dataObj);
       this.addEvent(dataObj);
@@ -270,16 +289,20 @@ var SNB={};
       r.path(quoteRectPath).attr(qAttr);
       r.path(volumeRectPath).attr(vAttr);
     },
-    generateQuotePath:function(dataX,dataY){
+    generateQuotePath:function(dataX,dataY,dataObj){
       var path={},
           stockPath=["M"],
           bgPath=["M"],
           options=this.options,
           tg=options.topGutter,
           lg=options.leftGutter,
-          qh=options.quote.quoteHeight;
+          qh=options.quote.quoteHeight,
+          datas=dataObj.quote.datas;
 
-      for(var i=0,ii=dataX.length;i<ii;i++){
+      for(var i=0,ii=dataY.length;i<ii;i++){
+        if(datas[i]==0){
+          continue;
+        }
         if(i){
           stockPath=stockPath.concat([dataX[i],dataY[i]]);
           bgPath=bgPath.concat([dataX[i],dataY[i]]);
@@ -319,14 +342,63 @@ var SNB={};
       stockLine=r.path(path.stockPath).attr({stroke:"#4572A7","stroke-width":"2"});
       bgLine=r.path(path.bgPath).attr({stroke: "none", fill: "#f4f4ff",opacity:".7"});
     },
-    drawTimeLine:function(){
+    drawTimeLine:function(dataObj){
+      var options=this.options,
+          r=this.canvas,
+          begeinX=options.leftGutter,
+          begeinY=options.topGutter+options.quote.quoteHeight+options.quote_volume_space+options.volume.volumeHeight+10,
+
+          times=dataObj.times,
+          timeBlockCount,
+          width=options.quote.quoteWidth,
+          timeTable;
+
+      if(options.period==="1d"){
+        var time=times[0];
+        if(time){
+          time=time.split(" ");
+          time=time[2]+" "+time[1];
+        }
+
+        r.text(begeinX,begeinY,time).attr({font: '12px Helvetica, Arial', fill: "#666",color:"#666"});
+
+
+        if(options.stockType==="AStock"){
+          timeBlockCount=8;
+          timeTable=["","10:00","","11:00","13:00","","14:00","","15:00"];
+          
+        }else if(options.stockType==="HKStock"){
+          timeBlockCount=10;
+          timeTable=["","","","11:00","","12:00","14:00","","15:00","","16:00"];
+          
+        }else if(options.stockType==="$Stock"){
+          timeBlockCount=13;
+          timeTable=["","10:00","","11:00","","12:00","","13:00","","14:00","","15:00","","16:00"];
+        }
+        var timeTick=width/timeBlockCount;
+
+        for(var i=0,ii=timeTable.length;i<ii;i++){
+          var text=timeTable[i];
+          if(text){
+            var x=begeinX+timeTick*i;
+            r.text(x,begeinY,text).attr({font: '12px Helvetica, Arial', fill: "#666",color:"#666"});
+            var y=begeinY-10;
+            r.path(["M",x,y,"L",x,options.topGutter]).attr({"stroke-dasharray":".",stroke:"#e3e3e3"});
+          }
+        }    
+      }else{
+        
+      }    
+
+
+          
       
     },
     addEvent:function(dataObj){
       var r=this.canvas,
           options=this.options,
           quote=options.quote,
-          pCount=dataObj.pCount,
+          pCount=dataObj.quote.yAxes.length,
           tg=options.topGutter,
           qvs=options.quote_volume_space,
           vh=options.volume.volumeHeight,
@@ -357,7 +429,8 @@ var SNB={};
             }
           })
           rect.hover(function(){
-            tempLine=r.path(["M",orignX,tg,"L",orignX,qh+qvs+vh]).attr({"stroke":"#c0c0c0"});
+            //tempLine=r.path(["M",orignX,tg,"L",orignX,qh+qvs+vh]).attr({"stroke":"#c0c0c0"});
+            tempLine=r.path(["M",orignX,tg,"L",orignX,qh]).attr({"stroke":"#c0c0c0"});
             tempCircle=r.circle(orignX,orignY,"3").attr({"stroke-width":"1",stroke:"#fff",fill:"#4572A7"});
             var tipWidth=50,
                 tipHeight=20,
@@ -372,17 +445,17 @@ var SNB={};
             rectY=orignY-5;
 
             tempRect=r.rect(rectX,rectY,50,20,3).attr({"stroke-width":"1",stroke:"#4572A7"});
-            tempVRect=r.rect(rectX,vy-5,50,20,3).attr({"stroke-width":"1",stroke:"#4572A7"});
+            //tempVRect=r.rect(rectX,vy-5,50,20,3).attr({"stroke-width":"1",stroke:"#4572A7"});
             tempText=r.text(rectX+20,rectY+7,data.current).attr({font: '10px Helvetica, Arial', fill: "#666",color:"#666"});
-            tempVText=r.text(rectX+20,vy+7,data.volume).attr({font: '10px Helvetica, Arial', fill: "#666",color:"#666"});
+            //tempVText=r.text(rectX+20,vy+7,data.volume).attr({font: '10px Helvetica, Arial', fill: "#666",color:"#666"});
           },function(){
             if(tempLine){
               tempLine.remove();
               tempCircle.remove();
               tempRect.remove();
               tempText.remove();
-              tempVText.remove();
-              tempVRect.remove();
+              //tempVText.remove();
+              //tempVRect.remove();
             }
           })
 
@@ -401,6 +474,43 @@ var SNB={};
         bgLine.animate({path:path.bgPath},0);
       });
       hoverEvent(dataX[dataX.length-1],dataY[dataY.length-1],newPoint,r); 
+    },
+    getStockType:function(stockid){
+      var specialHKStocks={
+          HKHSI:1,
+          HKHSF:1,
+          HKHSU:1,
+          HKHSP:1,
+          HKHSC:1,
+          HKVHSI:1,
+          HKHSCEI:1,
+          HKHSCCI:1,
+          HKGEM:1,
+          HKHKL:1
+        },
+        USIndexes={
+          DJI30:1,
+          NASDAQ:1,
+          SP500:1,
+          ICS30:1
+        };
+      if(/^S[HZ]\d+$/.test(stockid)){
+        if(/^SZ200/.test(stockid)){//SH900||SZ200为HK$B股
+          return {money:"HK$",market:"深B",bigType:"沪深",stockType:"AStock"}
+        }else if(/^SH900/.test(stockid)){
+          return {money:"$",market:"沪B",bigType:"沪深",stockType:"AStock"};
+        }else if(/^(SH00|SZ399)/.test(stockid)){//指数
+          return {money:"",market:"",bigType:"指数",stockType:"AStock"};
+        }
+        return {money:"￥",market:"A股",bigType:"沪深",stockType:"AStock"};
+      }else if(/^\d+$/.test(stockid)){
+        return {money:"HK$",market:"港股",bigType:"港股",stockType:"HKStock"};
+      }else if(specialHKStocks[stockid]){//指数
+        return {money:"",market:"",bigType:"指数",stockType:"HKStock"};
+      }else if(USIndexes[stockid]){
+        return {money:"",market:"",bigType:"指数",stockType:"$Stock"};
+      }
+      return {money:"$",market:"美股",bigType:"美股",stockType:"$Stock"};
     }
   }
 }($))

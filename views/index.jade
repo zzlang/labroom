@@ -2,13 +2,39 @@ html
   head
     title index
     style
-      #stock{
-        margin:200 auto;
+      .container{
+        margin:10 auto;
         width:800px;
-        height:500px;
+        height:350px;
+      }
+      #select{
+        margin:20 200;
+        overflow:hidden;
+
+      }
+      #select li{
+        float:left;
+        border:1px solid #f2f2f2;
+        padding:3px 5px;
+        cursor:pointer;
+      }
+      #select li.selected{
+        background:#f1f1f1;
       }
   body
-    #stock
+    ul#select
+      li#1d.selected 1d
+      li#5d 5d
+      li#1m 1m
+      li#3m 3m
+      li#6m 6m
+      li#1y 1y
+      li#3y 3y
+      li#5y 5y
+      li#10y 10y
+    #stock.container
+    #stock1.container
+    #stock2.container
     script(src='/socket.io/socket.io.js')
     script(src='/static/js/lib/jquery.js')
     script(src='/static/js/lib/raphael.js')
@@ -21,5 +47,15 @@ html
         socket.emit('my other event', { my: 'data' });
       });
 
-      var chart1=new SNB.stockChart({container:"stock"});
+      var chart1=new SNB.stockChart({container:"stock",symbol:"GOOG"});
+      var chart2=new SNB.stockChart({container:"stock1",symbol:"SH600768"});
+      var chart3=new SNB.stockChart({container:"stock2",symbol:"03888"});
+      $(function(){
+        $("#select li").click(function(){
+          $("#select li").removeClass("selected");
+          $(this).addClass("selected");
+          $("#stock").html("");
+          var chart=new SNB.stockChart({container:"stock",period:this.id});
+        })
+      })
 
