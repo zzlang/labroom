@@ -51,7 +51,17 @@ var SNB={};
       apiKey:"47bce5c74f",
       dayPointsCount_AStock:30*4,//a-stock open time: 9:30AM-11:30AM 1:00PM-3:00PM  total 4hours,delete the same point 11:30AM and 1:00PM ,then 4*30-1.
       dayPointsCount_HKStock:30*5,//hk-stock open time :9:30AM-12:00AM 1:30PM-4:00PM
-      dayPointsCount_$Stock:30*6.5//$-stock open time: 9:30AM-4:00PM
+      dayPointsCount_$Stock:30*6.5,//$-stock open time: 9:30AM-4:00PM
+      periodToTime:{
+        "5d":"date",
+        "1m":"date",
+        "3m":"month",
+        "6m":"month",
+        "1y":"month",
+        "3y":"year",
+        "5y":"year",
+        "10y":"year"
+      }
     }
 
     this.options=options=$.extend(defaultOptions,options);
@@ -113,6 +123,23 @@ var SNB={};
             return data.time.indexOf(deleteTime)>-1;
           })    
         }else{
+          $.map(dataList,function(data){
+            var tempArray=data.time.split(" ");
+            switch(options.periodToTime[options.period]){
+              case "date":
+                data.date=new Date(data.time).getDate();
+                data.dateStr=tempArray[1]+" "+tempArray[2];
+                break;
+              case "month":
+                data.month=new Date(data.time).getMonth()+1;
+                data.monthStr=tempArray[1]+" "+tempArray[2];
+                break;
+              case "year":
+                data.year=new Date(data.time).getFullYear();
+                break;    
+            }
+            return data;
+          })
           return dataList;
         }
       }
@@ -132,8 +159,13 @@ var SNB={};
             tempObj=that.convert(dataGap),
             baseNum=Math.ceil(tempObj.mantissa),
             exponent=tempObj.exponent;
+
+        if(baseNum===10){
+          baseNum=1;
+          exponent++;
+        }    
             
-        var tick=getTick(baseNum)*Math.pow(10,exponent),    
+        var tick=getTick(baseNum,dataType)*Math.pow(10,exponent),    
             dataStart=Math.floor(minData/tick)*tick,
             dataEnd=Math.ceil(maxData/tick)*tick+tick;
 
@@ -186,14 +218,25 @@ var SNB={};
       }    
 
       dataObj.times=_.pluck(dataList,"time");
-      function getTick(baseNum){
-        if(baseNum<4){
-          tick=0.5;
-        }else if(baseNum<8){
-          tick=1;
+      function getTick(baseNum,dataType){
+        if(dataType=="current"){
+          if(baseNum<4){
+            tick=0.5;
+          }else if(baseNum<8){
+            tick=1;
+          }else{
+            tick=2;
+          } 
         }else{
-          tick=2;
+          if(baseNum<3){
+            tick=0.5;
+          }else if(baseNum<5){
+            tick=1;
+          }else{
+            tick=2;
+          }
         }
+
         return tick;
       }    
 
@@ -307,7 +350,7 @@ var SNB={};
           stockPath=stockPath.concat([dataX[i],dataY[i]]);
           bgPath=bgPath.concat([dataX[i],dataY[i]]);
           if(i==dataY.length-1){
-            bgPath=bgPath.concat([dataX[i],tg+qh,lg,tg+qh,"Z"])
+            bgPath=bgPath.concat([dataX[i],tg+qh,stockPath[1],tg+qh,"Z"])
           }
 
         }else{
@@ -402,7 +445,9 @@ var SNB={};
           tg=options.topGutter,
           qvs=options.quote_volume_space,
           vh=options.volume.volumeHeight,
-          qh=quote.quoteHeight;
+          qh=quote.quoteHeight,
+          period=options.period,
+          subTimeCount=1;
         //draw rect to emit event
       for(var i=0;i<pCount;i++){
         var orignX=dataObj.quote.xAxes[i],
@@ -410,10 +455,36 @@ var SNB={};
             vx=dataObj.volume.xAxes[i],
             vy=dataObj.volume.yAxes[i],
             data=dataObj.dataList[i],
-
+            preData=dataObj.dataList[i-1]||{},
             rectWidth=quote.quoteWidth/pCount,
             x=orignX-rectWidth/2,
             rect=r.rect(x,tg,rectWidth,qh+qvs+vh).attr({"stroke":"none",fill:"#fff",opacity:0});
+
+        
+        //draw time line except 1d
+        if(period!=="1d"){
+          var intervalName=options.periodToTime[period],
+              preSubTime=preData[intervalName]||"",
+              subTime=data[intervalName],
+              subTimeStr=data[intervalName+"Str"];
+
+          if(subTime!==preSubTime){
+            
+            var begeinY=tg+qh+qvs+vh+10;
+            r.path(["M",orignX,begeinY-10,"L",orignX,tg]).attr({"stroke-dasharray":".",stroke:"#e3e3e3"});
+            subTimeCount++;
+            if(preSubTime){
+              if(period==="1m"&&subTimeCount%4!==0){
+                // continue;
+              }else if(period==="1y"&&subTimeCount%2!==0){
+                // continue;
+              }else{
+                r.text(orignX,begeinY,subTimeStr||subTime);
+              }
+            }
+          }                  
+        }
+            
 
         var tempLine,
             tempCircle,

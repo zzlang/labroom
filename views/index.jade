@@ -55,7 +55,7 @@ html
           $("#select li").removeClass("selected");
           $(this).addClass("selected");
           $("#stock").html("");
-          var chart=new SNB.stockChart({container:"stock",period:this.id});
+          var chart=new SNB.stockChart({container:"stock",period:this.id,symbol:chart1.options.symbol});
         })
       })
 
