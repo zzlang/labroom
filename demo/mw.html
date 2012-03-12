@@ -1,0 +1,53 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+  <title></title>
+  <style type="text/css">
+    .mw{
+      width:200px;
+      height:200px;
+      background:#f1f1f1;
+    }
+    .fullscreen {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9999;
+      margin: 0;
+      padding: 0;
+      background:#f1f1f1;
+    }
+  </style>
+</head>
+<body>
+  <div class="mw"></div>	
+  <script type="text/javascript" src="/static/js/lib/jquery.js"></script>
+  <script type="text/javascript" src="/static/js/lib/jquery.mousewheel.js"></script>
+  <script type="text/javascript" src="/static/js/lib/jquery.fullscreen.js"></script>
+  <script type="text/javascript">
+    $(function(){
+        var base=0;
+        $(".mw").bind("mousewheel",function(e,delta){
+          if(delta>0){
+            base++;
+          }else{
+            base--;
+          }
+          console.log(base);
+          }).click(function(e){
+            if($.support.fullscreen){
+              $(this).fullScreen();
+              e.preventDefault();
+              }else{
+                $(this).fullscreen();  
+              }
+          })
+    })
+    
+  </script>
+</body>
+</html>

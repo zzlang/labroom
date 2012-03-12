@@ -4,6 +4,9 @@ var app=express.createServer();
 
 //test();
 app.use("/static",express.static(__dirname+"/static"));
+app.use(express.methodOverride());
+app.use(express.bodyParser());
+app.use(express.cookieParser());
 app.set('views', __dirname + '/views');
 app.register(".html", require("stache"));
 

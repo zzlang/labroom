@@ -1,0 +1,49 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>jquery delegate</title>
+  <style type="text/css">
+    #parent{
+      border:1px solid black;
+      padding:5px;
+      width:500px;
+      height:500px;
+    }
+    #child{
+      background:red;
+      width:100px;
+      height:100px;
+    }
+    .container{
+    
+    }
+    .container li{
+      display:inline-block;
+      background:#eee;
+    }
+
+  </style>
+</head>
+<body>
+  <div id="parent">
+  	<div id="child"></div>
+  </div>
+  <ul class="container">
+  	<li>one</li><li>two</li><li>three</li><li>four</li><li>five</li>
+  </ul>
+  <script type="text/javascript" src="/static/js/lib/jquery.js"></script>
+  <script type="text/javascript">
+    $("#parent").delegate("#child","click",function(e){
+      alert("child is clicked");    
+    })
+    function onload(){
+      alert(123);
+    }
+    window.onload=function(){
+      alert(456);
+
+    }
+  </script>
+</body>
+</html>

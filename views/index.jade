@@ -21,6 +21,13 @@ html
       #select li.selected{
         background:#f1f1f1;
       }
+      #cutSVG{
+        margin:auto;
+        border:1px solid black;
+        background:#f1f1f1;
+        width:40px;
+        cursor:pointer;
+      }
   body
     ul#select
       li#1d.selected 1d
@@ -33,6 +40,7 @@ html
       li#5y 5y
       li#10y 10y
     #stock.container
+    #cutSVG 截图
     #stock1.container
     #stock2.container
     script(src='/socket.io/socket.io.js')
@@ -56,6 +64,12 @@ html
           $(this).addClass("selected");
           $("#stock").html("");
           var chart=new SNB.stockChart({container:"stock",period:this.id,symbol:chart1.options.symbol});
+        })
+        $("#cutSVG").click(function(){
+          var html=$("#stock").html();
+          $.post("/toPng",{html:html},function(ret){
+            console.log(ret);
+          })
         })
       })
 
