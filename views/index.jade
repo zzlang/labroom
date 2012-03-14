@@ -45,6 +45,7 @@ html
     #stock2.container
     script(src='/socket.io/socket.io.js')
     script(src='/static/js/lib/jquery.js')
+    script(src='/static/js/lib/jquery.mousewheel.js')
     script(src='/static/js/lib/raphael.js')
     script(src='/static/js/lib/underscore.js')
     script(src='/static/js/stockChart.js')
@@ -55,7 +56,7 @@ html
         socket.emit('my other event', { my: 'data' });
       });
 
-      var chart1=new SNB.stockChart({container:"stock",symbol:"GOOG"});
+      var chart1=new SNB.stockChart({container:"stock",symbol:"BIDU"});
       var chart2=new SNB.stockChart({container:"stock1",symbol:"SH600768"});
       var chart3=new SNB.stockChart({container:"stock2",symbol:"03888"});
       $(function(){

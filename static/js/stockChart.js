@@ -33,7 +33,7 @@ var SNB={};
         volumeBlanks:4,
         pathAttr:{"stroke":"#000","stroke-width":"0.5px"}
       },
-      quote_volume_space:10,//the space of quote and volume rect.
+      quote_volume_space:0,//the space of quote and volume rect.
       dataUrl:"http://api.xueqiu.com/stock/forchart/stocklist.json",
       chartType:{
         "1d":"rifenshitu",
@@ -46,12 +46,16 @@ var SNB={};
         "10y":"10nian"
       },//1d 5d 1m
       stockType:"$Stock",//stock type --a-stock||hk-stock||$stock
-      symbol:"AAPL",
-      period:"1d",//chartType
+      symbol:"BIDU",
+      period:"5d",//chartType
       apiKey:"47bce5c74f",
       dayPointsCount_AStock:30*4,//a-stock open time: 9:30AM-11:30AM 1:00PM-3:00PM  total 4hours,delete the same point 11:30AM and 1:00PM ,then 4*30-1.
-      dayPointsCount_HKStock:30*5,//hk-stock open time :9:30AM-12:00AM 1:30PM-4:00PM
+      dayPointsCount_HKStock:30*5.5,//hk-stock open time :9:30AM-12:00AM 1:00PM-4:00PM
       dayPointsCount_$Stock:30*6.5,//$-stock open time: 9:30AM-4:00PM
+      pointsCount_5d_AStock:125,
+      pointsCount_5d_HKStock:175,
+      pointsCount_5d_$Stock:200,
+      zoomRatio:0.05,//缩放比例，固定宽度，占图总宽的百分比
       periodToTime:{
         "5d":"date",
         "1m":"date",
@@ -84,12 +88,14 @@ var SNB={};
         if(ret.message&&ret.message.code=="0"){
           var datas=ret.chartlist,
               dataObj=that.wrapData(datas);
+              
+          that.originDatas=datas;
 
           callback(dataObj);    
         }
       })
     },
-    wrapData:function(dataList){
+    wrapData:function(dataList,isSlice){
       var dataObj={},
           options=this.options,
           lg=options.leftGutter,
@@ -103,8 +109,15 @@ var SNB={};
 
 
       var xAxes=[],pCount;//range time ba
-
-      pCount=dataObj.pCount=options.period==="1d"?options["dayPointsCount_"+options.stockType]:(dataList.length-1);
+      if(options.period==="5d"){
+        if(isSlice){
+          pCount=dataObj.pCount=dataList.length;
+        }else{
+          pCount=dataObj.pCount=options["pointsCount_5d_"+options.stockType];
+        }
+      }else{
+        pCount=dataObj.pCount=options.period==="1d"?options["dayPointsCount_"+options.stockType]:(dataList.length-1);
+      }
 
       var xGap=qw/pCount;
       for(var i=0;i<pCount;i++){
@@ -294,6 +307,7 @@ var SNB={};
       this.drawQuoteLine(path);
       this.drawVolumeLine(dataObj);
       this.addEvent(dataObj);
+      this.mousewheel(dataObj);
     },
     drawVolumeLine:function(dataObj){
       var xAxes=dataObj.volume.xAxes,
@@ -302,7 +316,7 @@ var SNB={};
           options=this.options,
           quote=this.options.quote,
           volume=this.options.volume,
-          endYAxis=options.topGutter+quote.quoteHeight+options.quote_volume_space+volume.volumeHeight,
+          endYAxis=options.topGutter+quote.quoteHeight+volume.volumeHeight,
           path=[];
 
       for(var i=0,ii=xAxes.length;i<ii;i++){
@@ -311,7 +325,7 @@ var SNB={};
 
         path=path.concat(["M",xAxis,yAxis,"L",xAxis,endYAxis]);
       }    
-      this.canvas.path(path);
+      this.volumeLine=this.canvas.path(path);
     },
     drawOutRect:function(){
       var options=this.options,
@@ -325,7 +339,7 @@ var SNB={};
           qAttr=options.quote.pathAttr,
           vAttr=options.volume.pathAttr,
           qm=options.quote_volume_space,
-          volumeYAxis=tg+qh+qm;
+          volumeYAxis=tg+qh;
           quoteRectPath=["M",lg,tg,"L",lg+qw,tg,lg+qw,tg+qh,lg,tg+qh,"Z"],
           volumeRectPath=["M",lg,volumeYAxis,"L",lg+vw,,volumeYAxis,lg+vw,volumeYAxis+vh,lg,volumeYAxis+vh,"Z"];
               
@@ -366,7 +380,9 @@ var SNB={};
     },
     drawYLab:function(ylabs){
       var options=this.options,
-          r=this.canvas;
+          r=this.canvas,
+          quoteYLabTextSet=r.set(),
+          quoteYLabLineSet=r.set();
       for(var i=0,ii=ylabs.length;i<ii-1;i++){
         var labY=ylabs[i],text;
         if(typeof labY.text=="number"){
@@ -374,16 +390,22 @@ var SNB={};
         }else{
           text=labY.text;
         }
-        r.text(options.leftGutter-22,labY.yAxis,text).attr({font: '12px Helvetica, Arial', fill: "#666",color:"#666"});
+        var text=r.text(options.leftGutter-22,labY.yAxis,text).attr({font: '12px Helvetica, Arial', fill: "#666",color:"#666"});
+        quoteYLabTextSet.push(text);
         if(i){
-          r.path(["M",options.leftGutter,labY.yAxis,"L",options.leftGutter+options.quote.quoteWidth,labY.yAxis]).attr({"stroke-dasharray":".",stroke:"#e3e3e3"});
+          var path=r.path(["M",options.leftGutter,labY.yAxis,"L",options.leftGutter+options.quote.quoteWidth,labY.yAxis]).attr({"stroke-dasharray":".",stroke:"#e3e3e3"});
+          quoteYLabLineSet.push(path);
         }
       }
+      this.quoteYLabTextSet=quoteYLabTextSet;
+      this.quoteYLabLineSet=quoteYLabLineSet;
     },
     drawQuoteLine:function(path){
       var r=this.canvas;
       stockLine=r.path(path.stockPath).attr({stroke:"#4572A7","stroke-width":"2"});
       bgLine=r.path(path.bgPath).attr({stroke: "none", fill: "#f4f4ff",opacity:".7"});
+      this.quoteLine=stockLine;
+      this.bgLine=bgLine;
     },
     drawTimeLine:function(dataObj){
       var options=this.options,
@@ -394,7 +416,8 @@ var SNB={};
           times=dataObj.times,
           timeBlockCount,
           width=options.quote.quoteWidth,
-          timeTable;
+          timeTable,
+          timeTextSet=timeLineSet=r.set();
 
       if(options.period==="1d"){
         var time=times[0];
@@ -424,11 +447,15 @@ var SNB={};
           var text=timeTable[i];
           if(text){
             var x=begeinX+timeTick*i;
-            r.text(x,begeinY,text).attr({font: '12px Helvetica, Arial', fill: "#666",color:"#666"});
+            var text=r.text(x,begeinY,text).attr({font: '12px Helvetica, Arial', fill: "#666",color:"#666"});
+            timeTextSet.push(text);
             var y=begeinY-10;
-            r.path(["M",x,y,"L",x,options.topGutter]).attr({"stroke-dasharray":".",stroke:"#e3e3e3"});
+            var path=r.path(["M",x,y,"L",x,options.topGutter]).attr({"stroke-dasharray":".",stroke:"#e3e3e3"});
+            timeLineSet.push(path);
           }
         }    
+        this.timeLineSet=timeLineSet;
+        this.timeTextSet=timeTextSet;
       }else{
         
       }    
@@ -439,6 +466,7 @@ var SNB={};
     },
     addEvent:function(dataObj){
       var r=this.canvas,
+          that=this,
           options=this.options,
           quote=options.quote,
           pCount=dataObj.quote.yAxes.length,
@@ -458,9 +486,12 @@ var SNB={};
             preData=dataObj.dataList[i-1]||{},
             rectWidth=quote.quoteWidth/pCount,
             x=orignX-rectWidth/2,
-            rect=r.rect(x,tg,rectWidth,qh+qvs+vh).attr({"stroke":"none",fill:"#fff",opacity:0});
+            rect=r.rect(x,tg,rectWidth,qh+qvs+vh).attr({"stroke":"none",fill:"#fff",opacity:0}),
+            eventRectSet=r.set();
 
         
+        eventRectSet.push(rect);
+        this.eventRectSet=eventRectSet;
         //draw time line except 1d
         if(period!=="1d"){
           var intervalName=options.periodToTime[period],
@@ -546,6 +577,52 @@ var SNB={};
       });
       hoverEvent(dataX[dataX.length-1],dataY[dataY.length-1],newPoint,r); 
     },
+    mousewheel:function(dataObj){
+      var that=this,
+          base=0,
+          spliceNum=0;
+      $("#"+this.options.container).bind("mousewheel",function(e,delta){
+        var zoomOut,zoomIn,ratio,flag;
+        if(delta>0){
+          zoomIn=true;
+          base++;
+          flag=1;
+        }else{
+          zoomOut=true;
+          base--;
+          flag=-1;
+        }
+        ratio=that.options.zoomRatio;
+        if(!that.quoteLine.removed){
+          that.quoteLine.remove();
+        }
+        if(!that.bgLine.removed){
+          that.bgLine.remove();
+        }
+        if(!that.volumeLine.removed){
+          that.volumeLine.remove();
+        }
+        var datas=that.originDatas;
+        var increaseNum=that.options.zoomRatio*dataObj.pCount;
+        spliceNum+=increaseNum*flag;
+        var newDatas=datas.slice(spliceNum);
+        if(newDatas.length<40){
+          that.options.period="1d"
+          that.getData(function(dataObj){
+          var path=that.generateQuotePath(dataObj.quote.xAxes,dataObj.quote.yAxes,dataObj);
+          that.drawQuoteLine(path);
+          that.drawVolumeLine(dataObj);
+          })
+        }else{
+          dataObj=that.wrapData(newDatas,true);
+          var path=that.generateQuotePath(dataObj.quote.xAxes,dataObj.quote.yAxes,dataObj);
+          that.drawQuoteLine(path);
+          that.drawVolumeLine(dataObj);
+        }
+
+        return false;
+      })
+    },
     getStockType:function(stockid){
       var specialHKStocks={
           HKHSI:1,
@@ -582,6 +659,9 @@ var SNB={};
         return {money:"",market:"",bigType:"指数",stockType:"$Stock"};
       }
       return {money:"$",market:"美股",bigType:"美股",stockType:"$Stock"};
+    },
+    fixPoint:function(points){
+      
     }
   }
 }($))
