@@ -34,10 +34,11 @@ var SNB={};
         pathAttr:{"stroke":"#000","stroke-width":"0.5px"}
       },
       quote_volume_space:0,//the space of quote and volume rect.
-      dataUrl:"http://api.xueqiu.com/stock/forchart/stocklist.json",
+      dataUrl:"/stock/forchart/stocklist.json",
       chartType:{
         "1d":"rifenshitu",
         "5d":"5tian",
+        "10d":"10tian",
         "3m":"3yue",
         "6m":"6yue",
         "1y":"1nian",
@@ -47,7 +48,7 @@ var SNB={};
       },//1d 5d 1m
       stockType:"$Stock",//stock type --a-stock||hk-stock||$stock
       symbol:"BIDU",
-      period:"5d",//chartType
+      period:"10d",//chartType
       apiKey:"47bce5c74f",
       dayPointsCount_AStock:30*4,//a-stock open time: 9:30AM-11:30AM 1:00PM-3:00PM  total 4hours,delete the same point 11:30AM and 1:00PM ,then 4*30-1.
       dayPointsCount_HKStock:30*5.5,//hk-stock open time :9:30AM-12:00AM 1:00PM-4:00PM
@@ -58,6 +59,7 @@ var SNB={};
       zoomRatio:0.05,//缩放比例，固定宽度，占图总宽的百分比
       periodToTime:{
         "5d":"date",
+        "10d":"date",
         "1m":"date",
         "3m":"month",
         "6m":"month",

@@ -50,11 +50,6 @@ html
     script(src='/static/js/lib/underscore.js')
     script(src='/static/js/stockChart.js')
     script
-      var socket = io.connect('http://127.0.0.1:4444');
-      socket.on('news', function (data) {
-        console.log(data);
-        socket.emit('my other event', { my: 'data' });
-      });
 
       var chart1=new SNB.stockChart({container:"stock",symbol:"BIDU"});
       var chart2=new SNB.stockChart({container:"stock1",symbol:"SH600768"});
