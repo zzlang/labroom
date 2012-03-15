@@ -43,16 +43,16 @@ module.exports=function(app){
       }
       if(period==="10d"||period==="1m"){
         try{
-          console.log(data);
           var obj=JSON.parse(data),
               ret=[],
               num=period==="10d"?20:10,
-              loop=period==="10d"?10:list.length,
-              list=period==="10d"?obj.chartlist.slice(-10):obj.chartlist;
+              list=period==="10d"?obj.chartlist.slice(-10):obj.chartlist,
+              loop=period==="10d"?10:list.length;
 
           for(var i=0;i<loop;i++){
             ret=ret.concat(generateExtraQuote(list[i],num-1));
           }    
+          console.log(data);
           obj.chartlist=ret;
           res.send(callback+"("+JSON.stringify(obj)+")");
 
@@ -73,8 +73,10 @@ module.exports=function(app){
               }else{
                 flag=-1;
               }
-              console.log(flag);
-              console.log(random);
+              if(current==0){
+                current="139";
+                volume="11000";
+              }
 
               obj.current=(parseFloat(current)+random*flag).toFixed(2);
               obj.volume=(parseFloat(volume)+volume*random*flag).toFixed(2);

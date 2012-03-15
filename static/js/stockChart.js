@@ -48,7 +48,9 @@ var SNB={};
       },//1d 5d 1m
       stockType:"$Stock",//stock type --a-stock||hk-stock||$stock
       symbol:"BIDU",
-      period:"10d",//chartType
+      period:"5d",//chartType
+      periodIndex:1,//period indexOf periodSeries
+      initDays:3,
       apiKey:"47bce5c74f",
       dayPointsCount_AStock:30*4,//a-stock open time: 9:30AM-11:30AM 1:00PM-3:00PM  total 4hours,delete the same point 11:30AM and 1:00PM ,then 4*30-1.
       dayPointsCount_HKStock:30*5.5,//hk-stock open time :9:30AM-12:00AM 1:00PM-4:00PM
@@ -67,15 +69,70 @@ var SNB={};
         "3y":"year",
         "5y":"year",
         "10y":"year"
-      }
+      },
+      periodSeries:["1d","5d","10d","1m","3m","6m","1y","3y","5y","10y"]
     }
-
     this.options=options=$.extend(defaultOptions,options);
     this.canvas=new Raphael(options.container,options.width,options.height);
     // if(window.location.hash){
     //   this.options.symbol=window.location.hash.substr(1);
     // }
     this.options.stockType=this.getStockType(this.options.symbol).stockType;
+    this.periodIndex=this.options.periodIndex;
+    this.periodSeries=this.options.periodSeries;
+    this.period=this.options.period;
+    this.transformPoint={
+      "1d":{
+        pre:"",
+        next:"5d",
+        toNext:200,
+        toPre:"",
+        ratioNext:1/5,
+        ratioPre:""
+
+      },
+      "5d":{
+        pre:"1d",
+        next:"10d",
+        toNext:200,
+        toPre:40,
+        ratioNext:5/10,
+        ratioPre:5/1
+      },
+      "10d":{
+        pre:"5d",
+        next:"1m",
+        toNext:200,
+        toPre:100,
+        ratioNext:10/23,
+        ratioPre:10/5
+      },
+      "1m":{
+        pre:"10d",
+        next:"6m",
+        toNext:200,
+        toPre:100,
+        ratioNext:1/6,
+        ratioPre:23/10
+      },
+      "6m":{
+        pre:"1m",
+        next:"10y",
+        toNext:123,
+        toPre:21,
+        ratioNext:1/20,
+        ratioPre:6/1
+      },
+      "10y":{
+        pre:"6m",
+        next:"",
+        toNext:"",
+        toPre:23,
+        ratioNext:"",
+        ratioPre:20/1
+      }
+    }
+    this.originDatas={};
     var that=this;
     this.getData(function(data){
       that.render(data);
@@ -86,16 +143,41 @@ var SNB={};
     getData:function(callback){
       var options=this.options,
           that=this;
-        $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:options.period},function(ret){
-        if(ret.message&&ret.message.code=="0"){
-          var datas=ret.chartlist,
-              dataObj=that.wrapData(datas);
-              
-          that.originDatas=datas;
 
-          callback(dataObj);    
+      if(that.originDatas[that.period]){
+        handler(that.originDatas[that.period]);
+      }else{
+        $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:that.period},function(ret){
+          if(ret.message&&ret.message.code=="0"){
+            handler(ret.chartlist);
+          }
+        })
+      }
+
+      function handler(datas){//处理接下来需要渲染的数据
+        var renderData,
+            wrapCount;
+
+        var point=that.transformPoint[that.period];
+        if(that.trend){
+          if(that.trend==="next"){
+            renderData=datas.slice(1/point.ratioPre*datas.length*-1);
+          }else{
+            renderData=datas
+          }
+          that.spliceNum=datas.length-renderData.length;
+        }else{
+          wrapCount=options["pointsCount_5d_"+options.stockType];
+          renderData=datas.slice(options.initDays/5*(-1)*datas.length);
+          that.spliceNum=wrapCount-renderData.length;
         }
-      })
+
+        var dataObj=that.wrapData(renderData,true);
+            
+        that.originDatas[that.period]=datas;
+        callback(dataObj);   
+      }
+
     },
     wrapData:function(dataList,isSlice){
       var dataObj={},
@@ -582,7 +664,7 @@ var SNB={};
     mousewheel:function(dataObj){
       var that=this,
           base=0,
-          spliceNum=0;
+          spliceNum=that.spliceNum;
       $("#"+this.options.container).bind("mousewheel",function(e,delta){
         var zoomOut,zoomIn,ratio,flag;
         if(delta>0){
@@ -594,6 +676,12 @@ var SNB={};
           base--;
           flag=-1;
         }
+
+        if(flag>0){
+          if(!that.transformPoint[that.period].toPre){
+            return false;
+          }
+        }
         ratio=that.options.zoomRatio;
         if(!that.quoteLine.removed){
           that.quoteLine.remove();
@@ -604,24 +692,45 @@ var SNB={};
         if(!that.volumeLine.removed){
           that.volumeLine.remove();
         }
-        var datas=that.originDatas;
+        var datas=that.originDatas[that.period];
         var increaseNum=that.options.zoomRatio*dataObj.pCount;
         spliceNum+=increaseNum*flag;
-        var newDatas=datas.slice(spliceNum);
-        if(newDatas.length<40){
-          that.options.period="1d"
-          that.getData(function(dataObj){
-          var path=that.generateQuotePath(dataObj.quote.xAxes,dataObj.quote.yAxes,dataObj);
-          that.drawQuoteLine(path);
-          that.drawVolumeLine(dataObj);
-          })
+        var newDatas=datas.slice(spliceNum),
+            point=that.transformPoint[that.period];
+        if(flag<0){
+          that.trend="next";// 变幻的趋势，向下走 增大
+          if(point.toNext&&spliceNum<increaseNum){
+            that.period=point.next;
+            that.getData(function(dataObj){
+              draw(dataObj);
+              spliceNum=that.spliceNum;
+            })
+          }else{
+            dataObj=that.wrapData(newDatas,true);
+            draw(dataObj);
+          }
         }else{
-          dataObj=that.wrapData(newDatas,true);
+          that.trend="pre";
+          if(point.toPre&&newDatas.length<point.toPre){
+            that.period=point.pre;
+            that.getData(function(dataObj){
+              draw(dataObj);
+              spliceNum=that.spliceNum;
+            });
+          }else{
+            if(point.toPre){
+              dataObj=that.wrapData(newDatas,true);
+              draw(dataObj);
+            }else{
+              return false;
+            }
+          }
+        }
+        function draw(dataObj){
           var path=that.generateQuotePath(dataObj.quote.xAxes,dataObj.quote.yAxes,dataObj);
           that.drawQuoteLine(path);
           that.drawVolumeLine(dataObj);
         }
-
         return false;
       })
     },
