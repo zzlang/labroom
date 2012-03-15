@@ -81,6 +81,7 @@ var SNB={};
     this.periodIndex=this.options.periodIndex;
     this.periodSeries=this.options.periodSeries;
     this.period=this.options.period;
+    this.isLoading=true;
     this.transformPoint={
       "1d":{
         pre:"",
@@ -147,8 +148,10 @@ var SNB={};
       if(that.originDatas[that.period]){
         handler(that.originDatas[that.period]);
       }else{
+        that.isLoading=true;
         $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:that.period},function(ret){
           if(ret.message&&ret.message.code=="0"){
+            that.isLoading=false;
             handler(ret.chartlist);
           }
         })
@@ -589,9 +592,9 @@ var SNB={};
             r.path(["M",orignX,begeinY-10,"L",orignX,tg]).attr({"stroke-dasharray":".",stroke:"#e3e3e3"});
             subTimeCount++;
             if(preSubTime){
-              if(period==="1m"&&subTimeCount%4!==0){
+              if(period==="1m"&&subTimeCount%4!==0){//每隔4天一个点
                 // continue;
-              }else if(period==="1y"&&subTimeCount%2!==0){
+              }else if(period==="1y"&&subTimeCount%2!==0){//每隔俩月一个点
                 // continue;
               }else{
                 r.text(orignX,begeinY,subTimeStr||subTime);
@@ -667,6 +670,9 @@ var SNB={};
           spliceNum=that.spliceNum;
       $("#"+this.options.container).bind("mousewheel",function(e,delta){
         var zoomOut,zoomIn,ratio,flag;
+        if(that.isLoading){
+          return false;
+        }
         if(delta>0){
           zoomIn=true;
           base++;
@@ -691,6 +697,18 @@ var SNB={};
         }
         if(!that.volumeLine.removed){
           that.volumeLine.remove();
+        }
+        if(!that.quoteYLabTextSet.removed){
+          that.quoteYLabTextSet.remove();
+        }
+        if(!that.quoteYLabLineSet.removed){
+          that.quoteYLabLineSet.remove();
+        }
+        if(!that.timeTextSet.removed){
+          that.timeTextSet.rmeove();
+        }
+        if(!that.timeLineSet.removed){
+          that.timeLineSet.remove()
         }
         var datas=that.originDatas[that.period];
         var increaseNum=that.options.zoomRatio*dataObj.pCount;
@@ -730,6 +748,9 @@ var SNB={};
           var path=that.generateQuotePath(dataObj.quote.xAxes,dataObj.quote.yAxes,dataObj);
           that.drawQuoteLine(path);
           that.drawVolumeLine(dataObj);
+          that.drawYLab(dataObj.quote.yLabels);
+          that.drawYLab(dataObj.volume.yLabels);
+          that.drawTimeLine(dataObj);
         }
         return false;
       })
