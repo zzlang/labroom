@@ -5,12 +5,6 @@ var SNB={};
     SNB.Models={};
   }
 
-/*  SNB.Models.stockPoint=Backbone.Model.extend({
-    initialize:function(){
-      var datetime=this.get("time");
-      this.set("timespan",Date.parse(datetime));
-    }
-  });*/
 
   SNB.stockChart=function(options){
     if(!options.container){
@@ -19,21 +13,9 @@ var SNB={};
     var defaultOptions={
       width:570,
       height:360,
-      leftGutter:40,
-      topGutter:2,
-      quote:{
-        quoteHeight:206,
-        quoteWidth:517,
-        quoteBlanks:7,
-        pathAttr:{"stroke":"#000","stroke-width":"0.5px"}
-      },
-      volume:{
-        volumeWidth:517,
-        volumeHeight:76,
-        volumeBlanks:4,
-        pathAttr:{"stroke":"#000","stroke-width":"0.5px"}
-      },
-      quote_volume_space:0,//the space of quote and volume rect.
+      volumeChartHeight:80,
+      dragBarHeight:40,
+      timeLineHeight:15,
       dataUrl:"/stock/forchart/stocklist.json",
       chartType:{
         "1d":"rifenshitu",
@@ -158,6 +140,7 @@ var SNB={};
       }
 
       function handler(datas){//处理接下来需要渲染的数据
+        that.originDatas[that.period]=datas;
         var renderData,
             wrapCount;
 
@@ -177,12 +160,28 @@ var SNB={};
 
         var dataObj=that.wrapData(renderData,true);
             
-        that.originDatas[that.period]=datas;
         callback(dataObj);   
       }
 
     },
     wrapData:function(dataList,isSlice){
+      var datas=_.reject(dataList,function(data){
+        return data.current==0;
+      });
+
+      var maxData=+Math.max.apply(Math,datas),
+          minData=+Math.min.apply(Math,datas),
+          dataGap=maxData-minData,
+          tempObj=that.convert(dataGap),//转换成科学计数法
+          baseNum=Math.ceil(tempObj.mantissa),//基数部分
+          exponent=tempObj.exponent;//指数部分
+
+      if(baseNum===10){
+        baseNum=1;
+        exponent++;
+      }    
+
+
       var dataObj={},
           options=this.options,
           lg=options.leftGutter,
@@ -269,17 +268,13 @@ var SNB={};
             dataStart=Math.floor(minData/tick)*tick,
             dataEnd=Math.ceil(maxData/tick)*tick+tick;
 
-        var yLabels=[dataStart],
+        var yLabels=[],
             tempStart=dataStart,
-            isQuote;  
+            isQuote,  
+            yLabelTick,
+            yStartYAxis=tg+qh,
+            yLabelObjs=[];
 
-        while(tempStart<dataEnd){
-          tempStart+=tick;
-          yLabels.push(tempStart);
-
-        }
-        var yLabelTick,yStartYAxis;
-        
         if(dataType=="current"){
           yLabelTick=qh/(yLabels.length-1);
           yStartYAxis=tg+qh;
@@ -288,8 +283,11 @@ var SNB={};
           yLabelTick=vh/(yLabels.length-1);
           yStartYAxis=tg+qh+options.quote_volume_space+vh;
         }
-        yLabelObjs=[];
-        for(var i=0,ii=yLabels.length;i<ii;i++){
+
+        var len=Math.ceil((dataEnd-dataStart)/tick);
+
+        for(var i=0;i<len;i++){
+          yLabels.push(tempStart+i*tick);
           var text;
           if(dataType=="volume"){
             var unit,last,newLabel=that.convert(yLabels[i]),exponent=newLabel.exponent;
@@ -311,10 +309,14 @@ var SNB={};
             text=yLabels[i];
           }
           yLabelObjs.push({yAxis:yStartYAxis-i*yLabelTick,text:text});
-        }    
 
-        var yAxes=that.range({start:dataStart,end:dataEnd},{start:start,end:end},isQuote)(datas);
-        return {xAxes:xAxes,yAxes:yAxes,yLabels:yLabelObjs,datas:datas};
+        }
+        return yLabels;
+
+        /*
+         *var yAxes=that.range({start:dataStart,end:dataEnd},{start:start,end:end},isQuote)(datas);
+         *return {xAxes:xAxes,yAxes:yAxes,yLabels:yLabelObjs,datas:datas};
+         */
       }    
 
       dataObj.times=_.pluck(dataList,"time");
@@ -354,22 +356,16 @@ var SNB={};
       var newArray=[],
           total;
       
-      if(isQuote){
-        total=options.topGutter+options.quote.quoteHeight+1;
-      }else{
-        total=options.topGutter+options.quote.quoteHeight+options.quote_volume_space+options.volume.volumeHeight;
-      }   
-
       return function(array){
 
         if(Object.prototype.toString.call(array)==="[object Array]"){
  
           for(var i=0,ii=array.length;i<ii;i++){
-            newArray[i]=total-((array[i]-sStart)*(tEnd-tStart)/(sEnd-sStart)+tStart);
+            newArray[i]=((array[i]-sStart)*(tEnd-tStart)/(sEnd-sStart)+tStart);
           }
           return newArray;
         }else{
-          return total-((array-sStart)*(tEnd-tStart)/(sEnd-sStart)+tStart);
+          return ((array-sStart)*(tEnd-tStart)/(sEnd-sStart)+tStart);
         }
       }   
     },
