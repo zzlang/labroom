@@ -48,12 +48,12 @@ html
     script(src='/static/js/lib/jquery.mousewheel.js')
     script(src='/static/js/lib/raphael.js')
     script(src='/static/js/lib/underscore.js')
-    script(src='/static/js/stockChart.js')
+    script(src='/static/js/stockChartNew.js')
     script
 
       var chart1=new SNB.stockChart({container:"stock",symbol:"BIDU"});
-      var chart2=new SNB.stockChart({container:"stock1",symbol:"SH600768"});
-      var chart3=new SNB.stockChart({container:"stock2",symbol:"03888"});
+      //var chart2=new SNB.stockChart({container:"stock1",symbol:"SH600768"});
+      //var chart3=new SNB.stockChart({container:"stock2",symbol:"03888"});
       $(function(){
         $("#select li").click(function(){
           $("#select li").removeClass("selected");

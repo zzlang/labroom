@@ -55,7 +55,8 @@ var SNB={};
       periodSeries:["1d","5d","10d","1m","3m","6m","1y","3y","5y","10y"]
     }
     this.options=options=$.extend(defaultOptions,options);
-    this.canvas=new Raphael(options.container,options.width,options.height);
+    this.paper=new Raphael(options.container,options.width,options.height);
+    this.container=options.container;
     // if(window.location.hash){
     //   this.options.symbol=window.location.hash.substr(1);
     // }
@@ -64,6 +65,23 @@ var SNB={};
     this.periodSeries=this.options.periodSeries;
     this.period=this.options.period;
     this.isLoading=true;
+    //各个图块的起始坐标。
+    this.stateBaseLine=0;
+    this.currentBaseLine=20;
+    this.timeBaseLine=220;
+    this.volumeBaseLine=235;
+    this.volumeEndLine=315;
+    this.minibarBaseLine=315;
+    //各个图块的高度
+    this.stateHeight=20;
+    this.currentHeight=200;
+    this.timeHeight=15;
+    this.volumeHeight=80;
+    this.volumeMiniInterval=0;
+    this.minibarHeight=40;
+
+    this.width=560;
+    this.height=360;
     this.transformPoint={
       "1d":{
         pre:"",
@@ -72,7 +90,6 @@ var SNB={};
         toPre:"",
         ratioNext:1/5,
         ratioPre:""
-
       },
       "5d":{
         pre:"1d",
@@ -142,7 +159,8 @@ var SNB={};
       function handler(datas){//处理接下来需要渲染的数据
         that.originDatas[that.period]=datas;
         var renderData,
-            wrapCount;
+            wrapCount,
+            isSlice=false;//是否截取
 
         var point=that.transformPoint[that.period];
         if(that.trend){
@@ -156,110 +174,100 @@ var SNB={};
           wrapCount=options["pointsCount_5d_"+options.stockType];
           renderData=datas.slice(options.initDays/5*(-1)*datas.length);
           that.spliceNum=wrapCount-renderData.length;
+          isSlice=true;
         }
 
-        var dataObj=that.wrapData(renderData,true);
+        var dataObj=that.wrapData(renderData,isSlice);
             
         callback(dataObj);   
       }
 
     },
     wrapData:function(dataList,isSlice){
-      var datas=_.reject(dataList,function(data){
+      var that=this;
+      var datas=_.reject(dataList,function(data){//剔除错误的数据
         return data.current==0;
       });
+      var dataSet={};//最终返回的数据集合
+      var options=this.options;
 
-      var maxData=+Math.max.apply(Math,datas),
-          minData=+Math.min.apply(Math,datas),
-          dataGap=maxData-minData,
-          tempObj=that.convert(dataGap),//转换成科学计数法
-          baseNum=Math.ceil(tempObj.mantissa),//基数部分
-          exponent=tempObj.exponent;//指数部分
+      var currentList=_.pluck(dataList,"current");
+      var volumeList=_.pluck(dataList,"volume");
 
-      if(baseNum===10){
-        baseNum=1;
-        exponent++;
-      }    
+      var maxCurrent=Math.max.apply(null,currentList),//取得current 和volume的最大最小值
+          minCurrent=Math.min.apply(null,currentList),
+          maxVolume=Math.max.apply(null,volumeList),
+          minVolume=Math.min.apply(null,volumeList);
 
 
-      var dataObj={},
-          options=this.options,
-          lg=options.leftGutter,
-          tg=options.topGutter,
-          qw=options.quote.quoteWidth,
-          qh=options.quote.quoteHeight,
-          vw=options.volume.volumeWidth,
-          vh=options.volume.volumeHeight,
-          that=this;
+      var currentYLableInfo=getLableY(minCurrent,maxCurrent,this.timeBaseLine,this.currentHeight,"current");    
+      var volumeYLableInfo=getLableY(minVolume,maxVolume,this.volumeEndLine,this.volumeHeight,"volume");    
 
+      dataSet.currentYLablesObj=currentYLableInfo.yLabelObjs;
+      dataSet.volumeYLablesObj=volumeYLableInfo.yLabelObjs;
+      dataSet.pointsList=[];
+      var pCount=0;//图上的总点数。天图如果刚开盘得考虑当天后续的点。
 
-
-      var xAxes=[],pCount;//range time ba
-      if(options.period==="5d"){
+      if(this.period==="5d"){
         if(isSlice){
-          pCount=dataObj.pCount=dataList.length;
+          pCount=dataList.length;
         }else{
-          pCount=dataObj.pCount=options["pointsCount_5d_"+options.stockType];
+          pCount=options["pointsCount_5d_"+options.stockType];
         }
       }else{
-        pCount=dataObj.pCount=options.period==="1d"?options["dayPointsCount_"+options.stockType]:(dataList.length-1);
+        pCount=options.period==="1d"?options["dayPointsCount_"+options.stockType]:(dataList.length-1);
       }
-
-      var xGap=qw/pCount;
+      this.pCount=pCount;
+      var xGap=this.width/pCount;
       for(var i=0;i<pCount;i++){
-        xAxes.push(lg+i*xGap);
-      }
+        var data=datas[i],
+            point=$.extend({},data);
 
-      xAxes.push(lg+qw);
-
-      function processData(dataList){// remove the repeating point
-        var stockType=options.stockType;
-        if(stockType!=="$Stock"&&options.period==="1d"){
-          var deleteTime=stockType==="AStock"?"11:30:00":"12:00:00",
-              newDataList=[];
-
-          return _.reject(dataList,function(data){
-            return data.time.indexOf(deleteTime)>-1;
-          })    
-        }else{
-          $.map(dataList,function(data){
-            var tempArray=data.time.split(" ");
-            switch(options.periodToTime[options.period]){
+        if(data){
+          var stockType=options.stockType;
+          if(stockType!=="$Stock"&&options.period==="1d"){
+            var deleteTime=stockType==="AStock"?"11:30:00":"12:00:00",
+                newDataList=[];
+            
+            if(data.time.indexOf(deleteTime)>-1){
+              continue;
+            }
+          }else{
+            var time=data.time,
+                tempArray=time.split(" ");
+            //处理坐标上的时间显示 
+            switch(options.periodToTime[that.period]){
               case "date":
-                data.date=new Date(data.time).getDate();
-                data.dateStr=tempArray[1]+" "+tempArray[2];
+                point.date=new Date(time).getDate();
+                point.dateStr=tempArray[1]+" "+tempArray[2];
                 break;
               case "month":
-                data.month=new Date(data.time).getMonth()+1;
-                data.monthStr=tempArray[1]+" "+tempArray[2];
+                point.month=new Date(time).getMonth()+1;
+                point.monthStr=tempArray[1]+" "+tempArray[2];
                 break;
               case "year":
-                data.year=new Date(data.time).getFullYear();
+                point.year=new Date(time).getFullYear();
                 break;    
             }
-            return data;
-          })
-          return dataList;
-        }
+          }
+          point.currentXAxis=i*xGap;
+          point.volumeXAris=i*xGap;
+          point.currentYAxis=that.timeBaseLine+that.currentBaseLine-that.range(currentYLableInfo.dataRange,{start:this.currentBaseLine,end:this.currentBaseLine+this.currentHeight})(data.current);
+          point.volumeYAxis=that.minibarBaseLine+that.volumeBaseLine-that.volumeMiniInterval-that.range(volumeYLableInfo.dataRange,{start:this.volumeBaseLine,end:this.volumeBaseLine+this.volumeHeight})(data.volume);
+          dataSet.pointsList.push(point);
+        }else{
+          dataSet.pointsList.push(null);//如果总点数超过当前数据量，后面的点为null,在图上不画出来。
+        }    
       }
 
-      dataList=processData(dataList);
-      dataObj.dataList=dataList;
-
-
-      function reflectData(dataType,start,end){//dataType--current||volume
-        var datas=_.pluck(dataList,dataType),
-            delete0datas=_.reject(datas,function(data){
-              return data==0;
-            }),
-            maxData=+Math.max.apply(Math,delete0datas),
-            minData=+Math.min.apply(Math,delete0datas),
-            dataGap=maxData-minData,
+      //height 图标的高
+      function getLableY(minData,maxData,yStartYAxis,height,dataType){//获取y轴--也就是左侧的间隔文字和坐标
+        var dataGap=maxData-minData,
             tempObj=that.convert(dataGap),
             baseNum=Math.ceil(tempObj.mantissa),
             exponent=tempObj.exponent;
 
-        if(baseNum===10){
+        if(baseNum===10){//由于baseNum取的是cell
           baseNum=1;
           exponent++;
         }    
@@ -268,29 +276,18 @@ var SNB={};
             dataStart=Math.floor(minData/tick)*tick,
             dataEnd=Math.ceil(maxData/tick)*tick+tick;
 
-        var yLabels=[],
-            tempStart=dataStart,
-            isQuote,  
-            yLabelTick,
-            yStartYAxis=tg+qh,
-            yLabelObjs=[];
-
-        if(dataType=="current"){
-          yLabelTick=qh/(yLabels.length-1);
-          yStartYAxis=tg+qh;
-          isQuote=true;
-        }else{
-          yLabelTick=vh/(yLabels.length-1);
-          yStartYAxis=tg+qh+options.quote_volume_space+vh;
-        }
-
+        //计算出间隔数量
         var len=Math.ceil((dataEnd-dataStart)/tick);
 
+        var tempStart=dataStart,
+            isQuote,  
+            yLabelTick=height/len,
+            yLabelObjs=[];
+
         for(var i=0;i<len;i++){
-          yLabels.push(tempStart+i*tick);
-          var text;
+          var text = tempStart+i*tick;
           if(dataType=="volume"){
-            var unit,last,newLabel=that.convert(yLabels[i]),exponent=newLabel.exponent;
+            var unit,last,newLabel=that.convert(text),exponent=newLabel.exponent;
             if(exponent>=9){
               unit="B";
               last=exponent-9;
@@ -305,21 +302,12 @@ var SNB={};
               last=0;
             }
             text=newLabel.mantissa*Math.pow(10,last)+unit;
-          }else{
-            text=yLabels[i];
           }
           yLabelObjs.push({yAxis:yStartYAxis-i*yLabelTick,text:text});
-
         }
-        return yLabels;
+        return {yLabelObjs:yLabelObjs,dataRange:{start:dataStart,end:dataEnd}};//把开始和结束数据返回，散列的时候要用到。
+      }
 
-        /*
-         *var yAxes=that.range({start:dataStart,end:dataEnd},{start:start,end:end},isQuote)(datas);
-         *return {xAxes:xAxes,yAxes:yAxes,yLabels:yLabelObjs,datas:datas};
-         */
-      }    
-
-      dataObj.times=_.pluck(dataList,"time");
       function getTick(baseNum,dataType){
         if(dataType=="current"){
           if(baseNum<4){
@@ -342,9 +330,7 @@ var SNB={};
         return tick;
       }    
 
-      dataObj.quote=reflectData("current",tg,tg+qh);
-      dataObj.volume=reflectData("volume",0,vh);
-      return dataObj;
+      return dataSet;
     },
     range:function(source,target,isQuote){//reflect one range of nums to others
       var sStart=source.start||0,
@@ -381,123 +367,134 @@ var SNB={};
       return {mantissa:CorrectMantissa,exponent:CorrectExponent};
     },
     render:function(dataObj){
-      var r=this.canvas;
-      this.drawOutRect();
-      this.drawYLab(dataObj.quote.yLabels);
-      this.drawYLab(dataObj.volume.yLabels);
-      this.drawTimeLine(dataObj);
-      var path=this.generateQuotePath(dataObj.quote.xAxes,dataObj.quote.yAxes,dataObj);
-      this.drawQuoteLine(path);
-      this.drawVolumeLine(dataObj);
-      this.addEvent(dataObj);
-      this.mousewheel(dataObj);
+      this.dataSet=dataObj;
+      this.drawBase();
+      this.drawLabel(dataObj);
+      this.drawChart(dataObj);
       this.bindMoveEvent();
+      this.mousewheel(dataObj);
+      this.drawMinibar();
     },
-    bindMoveEvent:{
-     
-      var that=this,
-          svg=$("#"+that.options.container).find("svg");
-      function updateHight(x){
-        
+    reDraw:function(dataObj){
+      var that=this;
+      if(that.tempCircle&&!that.tempCircle.removed){
+        that.tempCircle.remove();
+      }
+      if(that.stockInfo&&!that.stockInfo.removed){
+        that.stockInfo.remove();
+      }
+      if(that.currentHline&&!that.currentHline.removed){
+        that.currentHline.remove();
+      }
+      this.currentSplitLineSet.remove();
+      this.currentSplitTextSet.remove();
+      this.volumeSplitLineSet.remove();
+      this.volumeSplitTextSet.remove();
+      this.volumeLineSet.remove();
+      this.currentLine.remove();
+      this.drawLabel(dataObj);
+      this.drawChart(dataObj);
+    },
+    drawBase:function(){
+      this.upRect=this.paper.path(["M",0,0,"L",this.width,0,"L",this.width,this.volumeEndLine,"L",0,this.volumeEndLine,"Z"]).attr({fill:"white"}).toFront();//上部外框
+      //this.minibarRect=this.paper.rect(0,this.minibarBaseLine,this.width,this.minibarHeight);//minibar外框
+      this.stateRect=this.paper.rect(0,this.stateBaseLine,this.width,this.stateHeight);//状态框
+      this.currentRect=this.paper.rect(0,this.currentBaseLine,this.width,this.currentHeight);//current框
+      this.timeRect=this.paper.rect(0,this.timeBaseLine,this.width,this.timeHeight);//time框
+      this.volumeRect=this.paper.rect(0,this.volumeBaseLine,this.width,this.volumeHeight);//volume框
+    },
+    drawLabel:function(dataSet){
+      var that=this;
+      var currentYLables=dataSet.currentYLablesObj;
+      var volumeYLables=dataSet.volumeYLablesObj;
+      this.currentSplitLineSet=this.paper.set();
+      this.currentSplitTextSet=this.paper.set();
+      this.volumeSplitLineSet=this.paper.set();
+      this.volumeSplitTextSet=this.paper.set();
+      draw(currentYLables,this.currentSplitLineSet,this.currentSplitTextSet);
+      draw(volumeYLables,this.volumeSplitLineSet,this.volumeSplitTextSet);
+
+      function draw(labels,lineSet,textSet){
+        for(var i=0,len=labels.length;i<len;i++){
+          var label=labels[i];
+          lineSet.push(that.paper.path(["M",0,label.yAxis,"L",that.width,label.yAxis]).attr({stroke:"#e3e3e3"}));
+          textSet.push(that.paper.text(that.width-12,label.yAxis-7,label.text));
+        }
       }
     },
-    drawVolumeLine:function(dataObj){
-      var xAxes=dataObj.volume.xAxes,
-          yAxes=dataObj.volume.yAxes,
-          datas=dataObj.volume.data,
-          options=this.options,
-          quote=this.options.quote,
-          volume=this.options.volume,
-          endYAxis=options.topGutter+quote.quoteHeight+volume.volumeHeight,
-          path=[];
-
-      for(var i=0,ii=xAxes.length;i<ii;i++){
-        var xAxis=xAxes[i],
-            yAxis=yAxes[i];
-
-        path=path.concat(["M",xAxis,yAxis,"L",xAxis,endYAxis]);
-      }    
-      this.volumeLine=this.canvas.path(path);
-    },
-    drawOutRect:function(){
-      var options=this.options,
-          r=this.canvas,
-          lg=options.leftGutter,
-          tg=options.topGutter,
-          qw=options.quote.quoteWidth,
-          qh=options.quote.quoteHeight,
-          vw=options.volume.volumeWidth,
-          vh=options.volume.volumeHeight,
-          qAttr=options.quote.pathAttr,
-          vAttr=options.volume.pathAttr,
-          qm=options.quote_volume_space,
-          volumeYAxis=tg+qh;
-          quoteRectPath=["M",lg,tg,"L",lg+qw,tg,lg+qw,tg+qh,lg,tg+qh,"Z"],
-          volumeRectPath=["M",lg,volumeYAxis,"L",lg+vw,,volumeYAxis,lg+vw,volumeYAxis+vh,lg,volumeYAxis+vh,"Z"];
-              
-      r.path(quoteRectPath).attr(qAttr);
-      r.path(volumeRectPath).attr(vAttr);
-    },
-    generateQuotePath:function(dataX,dataY,dataObj){
-      var path={},
-          stockPath=["M"],
-          bgPath=["M"],
-          options=this.options,
-          tg=options.topGutter,
-          lg=options.leftGutter,
-          qh=options.quote.quoteHeight,
-          datas=dataObj.quote.datas;
-
-      for(var i=0,ii=dataY.length;i<ii;i++){
-        if(datas[i]==0){
-          continue;
-        }
-        if(i){
-          stockPath=stockPath.concat([dataX[i],dataY[i]]);
-          bgPath=bgPath.concat([dataX[i],dataY[i]]);
-          if(i==dataY.length-1){
-            bgPath=bgPath.concat([dataX[i],tg+qh,stockPath[1],tg+qh,"Z"])
+    drawChart:function(dataSet){
+      
+      var points=dataSet.pointsList;
+      var pathArray=["M"];
+      this.volumeLineSet=this.paper.set();
+      for(var i=0,len=points.length;i<len;i++){
+        var point=points[i];
+        if(point){
+          pathArray=pathArray.concat(point.currentXAxis,point.currentYAxis);
+          if(!i){
+            pathArray.push("L");
           }
+          var path=this.paper.path(["M",point.volumeXAris,point.volumeYAxis,"L",point.volumeXAris,this.volumeBaseLine+this.volumeHeight]).attr({stroke:"#4572A7","stroke-width":"1"});
+          this.volumeLineSet.push(path);
+        }
+      }
+      this.currentLine=this.paper.path(pathArray).attr({stroke:"#4572A7","stroke-width":"1"});
+    },
+    drawMinibar:function(){
+      var vel=this.volumeEndLine;
+      this.paper.path(["M",0,vel,"L",200,vel,"L",200,vel+30,"L",240,vel+30,"L",240,vel,"L",this.width,vel])
+      //两个拖动按钮
+      this.paper.circle(200,vel+15,5).attr({"fill":"red"});;
+      this.paper.circle(240,vel+15,5).attr({"fill":"red"});;
+      //两个移动按钮
+      this.paper.rect(0,this.minibarBaseLine+30,10,10).attr({"fill":"green"});
+      this.paper.rect(this.width-10,this.minibarBaseLine+30,10,10).attr({"fill":"green"});
+      //底部的拖动槽
+      this.paper.path(["M",0,this.minibarBaseLine+30,"L",this.width-10,this.minibarBaseLine+30,"L",this.width-10,this.minibarBaseLine+40,"L",0,this.minibarBaseLine+40,"Z"]);
+      //滑动块。
+      this.paper.path(["M",200,this.minibarBaseLine+30,"L",240,this.minibarBaseLine+30,"L",240,this.minibarBaseLine+40,"L",200,this.minibarBaseLine+40,"Z"]).attr({"fill":"#f1f1f1"});
+      //还有左右两块path遮罩层。
 
-        }else{
-          stockPath=stockPath.concat([dataX[i],dataY[i]]);
-          stockPath.push("L");
-          bgPath=bgPath.concat([dataX[i],dataY[i]]);
-          bgPath.push("L");
-        }
-      }
-      path.stockPath=stockPath;
-      path.bgPath=bgPath;
-      return path;
+
+      
     },
-    drawYLab:function(ylabs){
-      var options=this.options,
-          r=this.canvas,
-          quoteYLabTextSet=r.set(),
-          quoteYLabLineSet=r.set();
-      for(var i=0,ii=ylabs.length;i<ii-1;i++){
-        var labY=ylabs[i],text;
-        if(typeof labY.text=="number"){
-          text=labY.text.toFixed(2);
-        }else{
-          text=labY.text;
+    bindMoveEvent:function(){
+      var that=this;
+      var offsetX=$("#"+that.container).find("svg").offset().left;
+      this.upRect.mousemove(function(e){
+        if(that.tempCircle&&!that.tempCircle.removed){
+          that.tempCircle.remove();
         }
-        var text=r.text(options.leftGutter-22,labY.yAxis,text).attr({font: '12px Helvetica, Arial', fill: "#666",color:"#666"});
-        quoteYLabTextSet.push(text);
-        if(i){
-          var path=r.path(["M",options.leftGutter,labY.yAxis,"L",options.leftGutter+options.quote.quoteWidth,labY.yAxis]).attr({"stroke-dasharray":".",stroke:"#e3e3e3"});
-          quoteYLabLineSet.push(path);
+        if(that.stockInfo&&!that.stockInfo.removed){
+          that.stockInfo.remove();
         }
-      }
-      this.quoteYLabTextSet=quoteYLabTextSet;
-      this.quoteYLabLineSet=quoteYLabLineSet;
-    },
-    drawQuoteLine:function(path){
-      var r=this.canvas;
-      stockLine=r.path(path.stockPath).attr({stroke:"#4572A7","stroke-width":"2"});
-      bgLine=r.path(path.bgPath).attr({stroke: "none", fill: "#f4f4ff",opacity:".7"});
-      this.quoteLine=stockLine;
-      this.bgLine=bgLine;
+        if(that.currentHline&&!that.currentHline.removed){
+          that.currentHline.remove();
+        }
+        var eventX=e.pageX;
+        var xAxis=eventX-offsetX;
+        var points=that.dataSet.pointsList;
+
+        var gap=(points[1].currentXAxis-points[0].currentXAxis)/2;
+        for(var i=0,len=points.length;i<len;i++){
+          var point=points[i],
+              index=0;
+          if(point){
+            if(xAxis>point.currentXAxis&&xAxis<=point.currentXAxis+gap){
+              index=i;
+            }
+            if(xAxis<point.currentXAxis&&xAxis>=point.currentXAxis-gap){
+              index=i;
+            }
+            if(index){
+              that.tempCircle=that.paper.circle(point.currentXAxis,point.currentYAxis,3).attr({"stroke-width":"1",stroke:"#fff",fill:"#4572A7"});
+              var text="time:"+point.time+"  current:"+point.current+"  volume:"+point.volume;
+              that.stockInfo=that.paper.text(150,that.stateHeight/2,text);
+              that.currentHline=that.paper.path(["M",point.currentXAxis,that.currentBaseLine,"L",point.currentXAxis,that.timeBaseLine]).attr({stroke:"#e3e3e3"})
+            }
+          }    
+        }
+      })
     },
     drawTimeLine:function(dataObj){
       var options=this.options,
@@ -551,211 +548,72 @@ var SNB={};
       }else{
         
       }    
-
-
-          
-      
     },
-    addEvent:function(dataObj){
-      var r=this.canvas,
-          that=this,
-          options=this.options,
-          quote=options.quote,
-          pCount=dataObj.quote.yAxes.length,
-          tg=options.topGutter,
-          qvs=options.quote_volume_space,
-          vh=options.volume.volumeHeight,
-          qh=quote.quoteHeight,
-          period=options.period,
-          subTimeCount=1;
-        //draw rect to emit event
-      for(var i=0;i<pCount;i++){
-        var orignX=dataObj.quote.xAxes[i],
-            orignY=dataObj.quote.yAxes[i],
-            vx=dataObj.volume.xAxes[i],
-            vy=dataObj.volume.yAxes[i],
-            data=dataObj.dataList[i],
-            preData=dataObj.dataList[i-1]||{},
-            rectWidth=quote.quoteWidth/pCount,
-            x=orignX-rectWidth/2,
-            rect=r.rect(x,tg,rectWidth,qh+qvs+vh).attr({"stroke":"none",fill:"#fff",opacity:0}),
-            eventRectSet=r.set();
-
-        
-        eventRectSet.push(rect);
-        this.eventRectSet=eventRectSet;
-        //draw time line except 1d
-        if(period!=="1d"){
-          var intervalName=options.periodToTime[period],
-              preSubTime=preData[intervalName]||"",
-              subTime=data[intervalName],
-              subTimeStr=data[intervalName+"Str"];
-
-          if(subTime!==preSubTime){
-            
-            var begeinY=tg+qh+qvs+vh+10;
-            r.path(["M",orignX,begeinY-10,"L",orignX,tg]).attr({"stroke-dasharray":".",stroke:"#e3e3e3"});
-            subTimeCount++;
-            if(preSubTime){
-              if(period==="1m"&&subTimeCount%4!==0){//每隔4天一个点
-                // continue;
-              }else if(period==="1y"&&subTimeCount%2!==0){//每隔俩月一个点
-                // continue;
-              }else{
-                r.text(orignX,begeinY,subTimeStr||subTime);
-              }
-            }
-          }                  
-        }
-            
-
-        var tempLine,
-            tempCircle,
-            tempRect,
-            tempText,
-            tempVRect,
-            tempVText;
-
-        (function(orignX,orignY,vx,vy,data){
-          rect.click(function(){
-            if(tempCircle){
-              tempCircle.animate({fill:"red"},1000);
-            }
-          })
-          rect.hover(function(){
-            //tempLine=r.path(["M",orignX,tg,"L",orignX,qh+qvs+vh]).attr({"stroke":"#c0c0c0"});
-            tempLine=r.path(["M",orignX,tg,"L",orignX,qh]).attr({"stroke":"#c0c0c0"});
-            tempCircle=r.circle(orignX,orignY,"3").attr({"stroke-width":"1",stroke:"#fff",fill:"#4572A7"});
-            var tipWidth=50,
-                tipHeight=20,
-                rectX,
-                rectY;
-
-            if(options.quote.quoteWidth+options.leftGutter-orignX<tipWidth+2){
-              rectX=orignX-5-tipWidth;
-            }else{
-              rectX=orignX+5;
-            } 
-            rectY=orignY-5;
-
-            tempRect=r.rect(rectX,rectY,50,20,3).attr({"stroke-width":"1",stroke:"#4572A7"});
-            //tempVRect=r.rect(rectX,vy-5,50,20,3).attr({"stroke-width":"1",stroke:"#4572A7"});
-            tempText=r.text(rectX+20,rectY+7,data.current).attr({font: '10px Helvetica, Arial', fill: "#666",color:"#666"});
-            //tempVText=r.text(rectX+20,vy+7,data.volume).attr({font: '10px Helvetica, Arial', fill: "#666",color:"#666"});
-          },function(){
-            if(tempLine){
-              tempLine.remove();
-              tempCircle.remove();
-              tempRect.remove();
-              tempText.remove();
-              //tempVText.remove();
-              //tempVRect.remove();
-            }
-          })
-
-        })(orignX,orignY,vx,vy,data)
-      }
-    },
-    addPoint:function(){
-      var newPoint=generateData(40,Date.now(),2000,1)[0];
-      dataY.push(range({start:dataStart,end:dataEnd},{start:topgutter,end:topgutter+topHeiht})(newPoint.current));
-      dataX.push(41+dataX.length*xLength);
-      path=generatePath(dataX,dataY);
-
-      var tempShineCircle=r.circle(dataX[dataX.length-1],dataY[dataY.length-1],"2").attr({"stroke":"#4572A7","fill":"#4572A7"}).toFront();
-      var anim=stockLine.animate({path:path.stockPath},1000,function(){
-        tempShineCircle.remove();
-        bgLine.animate({path:path.bgPath},0);
-      });
-      hoverEvent(dataX[dataX.length-1],dataY[dataY.length-1],newPoint,r); 
-    },
-    mousewheel:function(dataObj){
+    mousewheel:function(){
       var that=this,
           base=0,
           spliceNum=that.spliceNum;
-      $("#"+this.options.container).bind("mousewheel",function(e,delta){
-        var zoomOut,zoomIn,ratio,flag;
-        if(that.isLoading){
-          return false;
-        }
-        if(delta>0){
-          zoomIn=true;
-          base++;
-          flag=1;
-        }else{
-          zoomOut=true;
-          base--;
-          flag=-1;
-        }
-
-        if(flag>0){
-          if(!that.transformPoint[that.period].toPre){
+      $("#"+this.options.container).find("svg").bind("mousewheel",function(e,delta){
+        var offsetY=$(this).offset().top;
+        if(e.pageY-offsetY<that.volumeEndLine){
+          var zoomOut,zoomIn,ratio,flag;
+          if(that.isLoading){
             return false;
           }
-        }
-        ratio=that.options.zoomRatio;
-        if(!that.quoteLine.removed){
-          that.quoteLine.remove();
-        }
-        if(!that.bgLine.removed){
-          that.bgLine.remove();
-        }
-        if(!that.volumeLine.removed){
-          that.volumeLine.remove();
-        }
-        if(!that.quoteYLabTextSet.removed){
-          that.quoteYLabTextSet.remove();
-        }
-        if(!that.quoteYLabLineSet.removed){
-          that.quoteYLabLineSet.remove();
-        }
-        if(!that.timeTextSet.removed){
-          that.timeTextSet.rmeove();
-        }
-        if(!that.timeLineSet.removed){
-          that.timeLineSet.remove()
-        }
-        var datas=that.originDatas[that.period];
-        var increaseNum=that.options.zoomRatio*dataObj.pCount;
-        spliceNum+=increaseNum*flag;
-        var newDatas=datas.slice(spliceNum),
-            point=that.transformPoint[that.period];
-        if(flag<0){
-          that.trend="next";// 变幻的趋势，向下走 增大
-          if(point.toNext&&spliceNum<increaseNum){
-            that.period=point.next;
-            that.getData(function(dataObj){
-              draw(dataObj);
-              spliceNum=that.spliceNum;
-            })
+          if(delta>0){
+            zoomIn=true;
+            base++;
+            flag=1;
           }else{
-            dataObj=that.wrapData(newDatas,true);
-            draw(dataObj);
+            zoomOut=true;
+            base--;
+            flag=-1;
           }
-        }else{
-          that.trend="pre";
-          if(point.toPre&&newDatas.length<point.toPre){
-            that.period=point.pre;
-            that.getData(function(dataObj){
-              draw(dataObj);
-              spliceNum=that.spliceNum;
-            });
-          }else{
-            if(point.toPre){
-              dataObj=that.wrapData(newDatas,true);
-              draw(dataObj);
-            }else{
+
+          if(flag>0){
+            if(!that.transformPoint[that.period].toPre){
               return false;
             }
           }
-        }
-        function draw(dataObj){
-          var path=that.generateQuotePath(dataObj.quote.xAxes,dataObj.quote.yAxes,dataObj);
-          that.drawQuoteLine(path);
-          that.drawVolumeLine(dataObj);
-          that.drawYLab(dataObj.quote.yLabels);
-          that.drawYLab(dataObj.volume.yLabels);
-          that.drawTimeLine(dataObj);
+          ratio=that.options.zoomRatio;
+
+          var datas=that.originDatas[that.period];
+          var increaseNum=that.options.zoomRatio*that.pCount;
+          spliceNum+=increaseNum*flag;
+          var newDatas=datas.slice(spliceNum),
+              point=that.transformPoint[that.period];
+          if(flag<0){
+            that.trend="next";// 变幻的趋势，向下走 增大
+            if(point.toNext&&spliceNum<increaseNum){
+              that.period=point.next;
+              that.getData(function(dataObj){
+                that.dataSet=dataObj;
+                that.reDraw(dataObj);
+                spliceNum=that.spliceNum;
+              })
+            }else{
+              that.dataSet=that.wrapData(newDatas,true);
+              that.reDraw(that.dataSet);
+            }
+          }else{
+            that.trend="pre";
+            if(point.toPre&&newDatas.length<point.toPre){
+              that.period=point.pre;
+              that.getData(function(dataObj){
+                that.reDraw(dataObj);
+                that.dataSet=dataObj;
+                spliceNum=that.spliceNum;
+              });
+            }else{
+              if(point.toPre){
+                that.dataSet=that.wrapData(newDatas,true);
+                that.reDraw(that.dataSet);
+              }else{
+                return false;
+              }
+            }
+          }
+        
         }
         return false;
       })
