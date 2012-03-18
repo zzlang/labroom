@@ -72,6 +72,9 @@ var SNB={};
     this.volumeBaseLine=235;
     this.volumeEndLine=315;
     this.minibarBaseLine=315;
+
+    this.grooveBaseLine=this.minibarBaseLine+30;//miniBar底部槽的初始位置。
+    this.grooveEndLine=this.grooveBaseLine+10;//槽底部位置。
     //各个图块的高度
     this.stateHeight=20;
     this.currentHeight=200;
@@ -250,6 +253,7 @@ var SNB={};
                 break;    
             }
           }
+          point.timespan=Date.parse(point.time);
           point.currentXAxis=i*xGap;
           point.volumeXAris=i*xGap;
           point.currentYAxis=that.timeBaseLine+that.currentBaseLine-that.range(currentYLableInfo.dataRange,{start:this.currentBaseLine,end:this.currentBaseLine+this.currentHeight})(data.current);
@@ -394,14 +398,60 @@ var SNB={};
       this.currentLine.remove();
       this.drawLabel(dataObj);
       this.drawChart(dataObj);
+
+      //reDraw minibar
+      var points=dataObj.pointsList;
+      var len=points.length;
+      if(len){
+        var beginTimespan=points[0].timespan;
+        var endTimespan=points[len-1].timespan;
+        var miniPointList=that.miniPointList;
+        var miniBeginTimespan,miniEndTimespan,miniBeginXaris,miniEndXaris;
+
+        for(var i=0,len=miniPointList.length;i<len;i++){
+          var point=miniPointList[i];
+          var key=point.timespan;
+          if(key>beginTimespan){
+            if(!miniBeginTimespan){
+              miniBeginXaris=miniPointList[i-1].xAxis;
+              miniBeginTimespan=key;
+            }
+            if(key>endTimespan){
+              if(!miniEndTimespan){
+                miniEndXaris=miniPointList[i-1][key];
+                miniEndTimespan=key;
+                break;
+              }
+            }
+          }
+        }
+        if(miniBeginTimespan&&!miniEndTimespan){
+          //miniEndTimespan=miniPointList[len-1].timespan;
+          miniEndTimespan=endTimespan;
+          miniEndXaris=550;
+        }
+        
+        var perTimeWidth=(miniEndXaris-miniBeginXaris)/(miniEndTimespan-miniBeginTimespan);
+        var x1=miniBeginXaris-perTimeWidth*(miniBeginTimespan-beginTimespan);
+        var x2=miniEndXaris+perTimeWidth*(beginTimespan-miniEndTimespan);
+        if(x1||x2){
+          if(!x2){
+            x2=550;
+          }
+          that.reDrawMiniLine(x1,x2);
+        }
+      }
     },
     drawBase:function(){
-      this.upRect=this.paper.path(["M",0,0,"L",this.width,0,"L",this.width,this.volumeEndLine,"L",0,this.volumeEndLine,"Z"]).attr({fill:"white"}).toFront();//上部外框
+      this.upRect=this.paper.path(["M",0,this.volumeEndLine,"L",0,0,"L",this.width,0,"L",this.width,this.volumeEndLine]).attr({fill:"white"});//上部外框
       //this.minibarRect=this.paper.rect(0,this.minibarBaseLine,this.width,this.minibarHeight);//minibar外框
-      this.stateRect=this.paper.rect(0,this.stateBaseLine,this.width,this.stateHeight);//状态框
-      this.currentRect=this.paper.rect(0,this.currentBaseLine,this.width,this.currentHeight);//current框
-      this.timeRect=this.paper.rect(0,this.timeBaseLine,this.width,this.timeHeight);//time框
-      this.volumeRect=this.paper.rect(0,this.volumeBaseLine,this.width,this.volumeHeight);//volume框
+      //this.stateRect=this.paper.rect(0,this.stateBaseLine,this.width,this.stateHeight);//状态框
+      this.paper.path(["M",0,this.stateHeight,"L",this.width,this.stateHeight]);
+      //this.currentRect=this.paper.rect(0,this.currentBaseLine,this.width,this.currentHeight);//current框
+      this.paper.path(["M",0,this.timeBaseLine,"L",this.width,this.timeBaseLine]);
+      //this.timeRect=this.paper.rect(0,this.timeBaseLine,this.width,this.timeHeight);//time框
+      this.paper.path(["M",0,this.volumeBaseLine,"L",this.width,this.volumeBaseLine]);
+      //this.volumeRect=this.paper.path("M",0,this.volumeBaseLine,"L",this.width,this.volumeBaseLine,"L",this.width,this.minibarBaseLine);//volume框
     },
     drawLabel:function(dataSet){
       var that=this;
@@ -417,7 +467,9 @@ var SNB={};
       function draw(labels,lineSet,textSet){
         for(var i=0,len=labels.length;i<len;i++){
           var label=labels[i];
-          lineSet.push(that.paper.path(["M",0,label.yAxis,"L",that.width,label.yAxis]).attr({stroke:"#e3e3e3"}));
+          if(i){
+            lineSet.push(that.paper.path(["M",0,label.yAxis,"L",that.width,label.yAxis]).attr({stroke:"#e3e3e3"}));
+          }
           textSet.push(that.paper.text(that.width-12,label.yAxis-7,label.text));
         }
       }
@@ -440,23 +492,150 @@ var SNB={};
       }
       this.currentLine=this.paper.path(pathArray).attr({stroke:"#4572A7","stroke-width":"1"});
     },
-    drawMinibar:function(){
+    reDrawMiniLine:function(x1,x2){
       var vel=this.volumeEndLine;
-      this.paper.path(["M",0,vel,"L",200,vel,"L",200,vel+30,"L",240,vel+30,"L",240,vel,"L",this.width,vel])
+      var that=this;
+      var grooveBaseLine=this.minibarBaseLine+30;//miniBar底部槽的初始位置。
+      var grooveEndLine=grooveBaseLine+10;//槽底部位置。
+      this.miniLine.animate({path:["M",0,vel,"L",x1,vel,"L",x1,grooveBaseLine,"L",x2,grooveBaseLine,"L",x2,vel,"L",that.width,vel].concat("")},1);
+      this.miniBlock.animate({path:["M",x1,grooveBaseLine,"L",x2,that.grooveBaseLine,"L",x2,grooveEndLine,"L",x1,grooveEndLine,"Z"].concat("")},1);
+      this.miniLeftCircle.animate({cx:x1},1);
+      this.miniRightCircle.animate({cx:x2},1);
+    },
+    drawMinibarBase:function(x1,x2){
+      var vel=this.volumeEndLine;
+      var that=this;
+      var grooveBaseLine=this.minibarBaseLine+30;//miniBar底部槽的初始位置。
+      var grooveEndLine=grooveBaseLine+10;//槽底部位置。
+      this.miniLine=this.paper.path(["M",0,vel,"L",x1,vel,"L",x1,grooveBaseLine,"L",x2,grooveBaseLine,"L",x2,vel,"L",this.width,vel]).toFront();
+      var originX1=x1;
+      var originX2=x2;
       //两个拖动按钮
-      this.paper.circle(200,vel+15,5).attr({"fill":"red"});;
-      this.paper.circle(240,vel+15,5).attr({"fill":"red"});;
+      var leftCircle=this.miniLeftCircle=this.paper.circle(x1,vel+15,5).attr({"fill":"red"}).drag(onleftmove,onstart,onleftend);
+      var rightCircle=this.miniRightCircle=this.paper.circle(x2,vel+15,5).attr({"fill":"red"}).drag(onrightmove,onstart,onrightend);
+      //为了在停止拖动时候变更x1 x2
+      var leftdx=0;
+      var rightdx=0;
+
+      var minInterval=5;//1d 最小间隔
+      function onleftmove(dx,dy,x,y,e){
+        if(x1+dx>=10&&x1+dx<=550){//不要超过边界。
+          leftCircle.animate({cx:x1+dx},1);
+          leftdx=dx;
+          move(dx,0);
+        }
+        return false;
+      };
+      function onrightmove(dx,dy,x,y,e){
+        if(x2+dx>=10&&x2+dx<=550){
+          rightCircle.animate({cx:x2+dx},1);
+          rightdx=dx;
+          move(0,dx);
+        }
+        return false;
+      }
+
+      function onstart(x,y,e){
+        console.log(x);
+        console.log(y);
+      }
+
+      function onleftend(dx,dy,x,y,e){
+        x1+=leftdx;
+        endAction();
+      }
+      function onrightend(dx,dy,x,y,e){
+        x2+=rightdx;
+        endAction();
+      }
+      function endAction(){//抽象出俩
+        if(x1>x2){
+          if(x1-x2<5){//间距小于5
+            x1=x2;
+            x2=x1+5;
+          }else{
+            var temp=x1;
+            x1=x2;
+            x2=temp;
+          }
+          move(0,0);
+        }else{
+          if(x2-x1<5){
+            x1=x2-5;
+            if(x1<10){//避免拖出左边。
+              x1=10;
+              x2=15;
+            }
+            move(0,0);
+          }
+        }
+      }
+      function move(dx1,dx2){
+        that.miniLine.animate({path:["M",0,vel,"L",x1+dx1,vel,"L",x1+dx1,grooveBaseLine,"L",x2+dx2,grooveBaseLine,"L",x2+dx2,vel,"L",that.width,vel].concat("")},1);
+        that.miniBlock.animate({path:["M",x1+dx1,grooveBaseLine,"L",x2+dx2,that.grooveBaseLine,"L",x2+dx2,grooveEndLine,"L",x1+dx1,grooveEndLine,"Z"].concat("")},1);
+        if(dx1&&dx2){//同时存在说明是点击下边槽的移动
+          leftCircle.animate({cx:x1+dx1},1);
+          rightCircle.animate({cx:x2+dx1},1);
+          x1+=dx1;
+          x2+=dx2;
+        }
+        if(!dx1&&!dx2){//交叉的情况，两个原点交换位置。
+          leftCircle.animate({cx:x1},1)
+          rightCircle.animate({cx:x2},1)
+        }
+        return false;
+      }
+
       //两个移动按钮
-      this.paper.rect(0,this.minibarBaseLine+30,10,10).attr({"fill":"green"});
-      this.paper.rect(this.width-10,this.minibarBaseLine+30,10,10).attr({"fill":"green"});
+      this.paper.rect(0,this.grooveBaseLine,10,10).attr({"fill":"green"}).click(function(e){
+        move(-10,-10);
+      });
+      this.paper.rect(this.width-10,grooveBaseLine,10,10).attr({"fill":"green"}).click(function(e){
+        move(10,10)
+      });
       //底部的拖动槽
-      this.paper.path(["M",0,this.minibarBaseLine+30,"L",this.width-10,this.minibarBaseLine+30,"L",this.width-10,this.minibarBaseLine+40,"L",0,this.minibarBaseLine+40,"Z"]);
+      this.paper.path(["M",0,grooveBaseLine,"L",this.width-10,grooveBaseLine,"L",this.width-10,grooveEndLine,"L",0,grooveEndLine,"Z"]);
       //滑动块。
-      this.paper.path(["M",200,this.minibarBaseLine+30,"L",240,this.minibarBaseLine+30,"L",240,this.minibarBaseLine+40,"L",200,this.minibarBaseLine+40,"Z"]).attr({"fill":"#f1f1f1"});
+      that.miniBlock=this.paper.path(["M",x1,grooveBaseLine,"L",x2,this.grooveBaseLine,"L",x2,grooveEndLine,"L",x1,grooveEndLine,"Z"]).attr({"fill":"#f1f1f1"});
       //还有左右两块path遮罩层。
+    },
+    drawMinibar:function(){
+      this.drawMinibarBase(535,550);
+      var options=this.options;
+      var that=this;
+      that.miniPointList=[];
+      $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:"5y"},function(ret){
+        if(ret.message&&ret.message.code=="0"){
+          var datas=ret.chartlist;
+          var currentList=_.pluck(datas,"current");
+          var volumeList=_.pluck(datas,"volume");
 
-
-      
+          var maxCurrent=Math.max.apply(null,currentList);//取得current 和volume的最大最小值
+          var minCurrent=Math.min.apply(null,currentList);//取得current 和volume的最大最小值
+          //需要减去两边槽的宽度
+          var xGap=(that.width-20)/datas.length;
+          var beginX=10;
+          var pathArray=["M"];
+          for(var i=0,len=datas.length;i<len;i++){
+            var miniPoint={};
+            var data=datas[i];
+            var xAxis=beginX+i*xGap;
+            var yAxis=that.grooveBaseLine+that.minibarBaseLine-that.range({start:minCurrent,end:maxCurrent},{start:that.minibarBaseLine+3,end:that.grooveBaseLine-3})(data.current);//减3是为了避免距离变现太近。
+            var timespan=Date.parse(data.time);
+            //坐标和时间对应。
+            miniPoint[timespan]=xAxis;
+            miniPoint[xAxis]=timespan;
+            miniPoint.timespan=timespan;
+            miniPoint.xAxis=xAxis;
+            pathArray=pathArray.concat(xAxis,yAxis);
+            if(!i){
+              pathArray.push("L");
+            }
+            that.miniPointList.push(miniPoint);
+          }
+          that.paper.path(pathArray).attr({stroke:"#4572A7","stroke-width":"1"});
+        }
+      })
     },
     bindMoveEvent:function(){
       var that=this;
