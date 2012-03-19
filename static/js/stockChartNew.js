@@ -418,26 +418,33 @@ var SNB={};
             }
             if(key>endTimespan){
               if(!miniEndTimespan){
-                miniEndXaris=miniPointList[i-1][key];
+                miniEndXaris=miniPointList[i-1].xAxis;
                 miniEndTimespan=key;
                 break;
               }
             }
           }
         }
-        if(miniBeginTimespan&&!miniEndTimespan){
+
+        if(miniBeginTimespan&&!miniEndTimespan&&!miniEndXaris){
           //miniEndTimespan=miniPointList[len-1].timespan;
           miniEndTimespan=endTimespan;
           miniEndXaris=550;
         }
+        var x2;
+
         
         var perTimeWidth=(miniEndXaris-miniBeginXaris)/(miniEndTimespan-miniBeginTimespan);
         var x1=miniBeginXaris-perTimeWidth*(miniBeginTimespan-beginTimespan);
-        var x2=miniEndXaris+perTimeWidth*(beginTimespan-miniEndTimespan);
+        if(miniEndXaris!=550){
+          x2=miniEndXaris+perTimeWidth*(endTimespan-miniEndTimespan);
+        }
         if(x1||x2){
           if(!x2){
             x2=550;
           }
+          that.x1=x1;
+          that.x2=x2;
           that.reDrawMiniLine(x1,x2);
         }
       }
@@ -504,6 +511,9 @@ var SNB={};
     },
     drawMinibarBase:function(x1,x2){
       var vel=this.volumeEndLine;
+      //方便事件交互，把他俩绑定到全局上。
+      this.x1=x1;
+      this.x2=x2;
       var that=this;
       var grooveBaseLine=this.minibarBaseLine+30;//miniBar底部槽的初始位置。
       var grooveEndLine=grooveBaseLine+10;//槽底部位置。
@@ -519,16 +529,16 @@ var SNB={};
 
       var minInterval=5;//1d 最小间隔
       function onleftmove(dx,dy,x,y,e){
-        if(x1+dx>=10&&x1+dx<=550){//不要超过边界。
-          leftCircle.animate({cx:x1+dx},1);
+        if(that.x1+dx>=10&&that.x1+dx<=550){//不要超过边界。
+          leftCircle.animate({cx:that.x1+dx},1);
           leftdx=dx;
           move(dx,0);
         }
         return false;
       };
       function onrightmove(dx,dy,x,y,e){
-        if(x2+dx>=10&&x2+dx<=550){
-          rightCircle.animate({cx:x2+dx},1);
+        if(that.x2+dx>=10&&that.x2+dx<=550){
+          rightCircle.animate({cx:that.x2+dx},1);
           rightdx=dx;
           move(0,dx);
         }
@@ -541,43 +551,43 @@ var SNB={};
       }
 
       function onleftend(dx,dy,x,y,e){
-        x1+=leftdx;
+        that.x1+=leftdx;
         endAction();
       }
       function onrightend(dx,dy,x,y,e){
-        x2+=rightdx;
+        that.x2+=rightdx;
         endAction();
       }
       function endAction(){//抽象出俩
-        if(x1>x2){
-          if(x1-x2<5){//间距小于5
-            x1=x2;
-            x2=x1+5;
+        if(that.x1>that.x2){
+          if(that.x1-that.x2<5){//间距小于5
+            that.x1=that.x2;
+            that.x2=that.x1+5;
           }else{
-            var temp=x1;
-            x1=x2;
-            x2=temp;
+            var temp=that.x1;
+            that.x1=that.x2;
+            that.x2=temp;
           }
           move(0,0);
         }else{
-          if(x2-x1<5){
-            x1=x2-5;
-            if(x1<10){//避免拖出左边。
-              x1=10;
-              x2=15;
+          if(that.x2-that.x1<5){
+            that.x1=that.x2-5;
+            if(that.x1<10){//避免拖出左边。
+              that.x1=10;
+              that.x2=15;
             }
             move(0,0);
           }
         }
       }
       function move(dx1,dx2){
-        that.miniLine.animate({path:["M",0,vel,"L",x1+dx1,vel,"L",x1+dx1,grooveBaseLine,"L",x2+dx2,grooveBaseLine,"L",x2+dx2,vel,"L",that.width,vel].concat("")},1);
-        that.miniBlock.animate({path:["M",x1+dx1,grooveBaseLine,"L",x2+dx2,that.grooveBaseLine,"L",x2+dx2,grooveEndLine,"L",x1+dx1,grooveEndLine,"Z"].concat("")},1);
+        that.miniLine.animate({path:["M",0,vel,"L",that.x1+dx1,vel,"L",that.x1+dx1,grooveBaseLine,"L",that.x2+dx2,grooveBaseLine,"L",that.x2+dx2,vel,"L",that.width,vel].concat("")},1);
+        that.miniBlock.animate({path:["M",that.x1+dx1,grooveBaseLine,"L",that.x2+dx2,that.grooveBaseLine,"L",that.x2+dx2,grooveEndLine,"L",that.x1+dx1,grooveEndLine,"Z"].concat("")},1);
         if(dx1&&dx2){//同时存在说明是点击下边槽的移动
-          leftCircle.animate({cx:x1+dx1},1);
-          rightCircle.animate({cx:x2+dx1},1);
-          x1+=dx1;
-          x2+=dx2;
+          leftCircle.animate({cx:that.x1+dx1},1);
+          rightCircle.animate({cx:that.x2+dx1},1);
+          that.x1+=dx1;
+          that.x2+=dx2;
         }
         if(!dx1&&!dx2){//交叉的情况，两个原点交换位置。
           leftCircle.animate({cx:x1},1)
