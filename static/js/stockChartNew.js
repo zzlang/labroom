@@ -622,6 +622,8 @@ var SNB={};
       });
       this.paper.rect(this.width-10,grooveBaseLine,10,10).attr({"fill":"green"}).click(function(e){
         move(10,10)
+        that.miniStartIndex-=10;
+        that.drawMiniChartLine();
       });
       //底部的拖动槽
       this.paper.path(["M",0,grooveBaseLine,"L",this.width-10,grooveBaseLine,"L",this.width-10,grooveEndLine,"L",0,grooveEndLine,"Z"]);
@@ -665,9 +667,10 @@ var SNB={};
 
     },
     drawMinibar:function(){
-      this.drawMinibarBase(535,550);
+      this.drawMinibarBase(545,550);
       var options=this.options;
       var that=this;
+      var minBlock=5;
       that.miniPointList=[];
       $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:"5y"},function(ret){
         if(ret.message&&ret.message.code=="0"){
@@ -678,29 +681,79 @@ var SNB={};
           var maxCurrent=Math.max.apply(null,currentList);//取得current 和volume的最大最小值
           var minCurrent=Math.min.apply(null,currentList);//取得current 和volume的最大最小值
           //需要减去两边槽的宽度
-          var xGap=(that.width-20)/datas.length;
           var beginX=10;
           var pathArray=["M"];
-          for(var i=0,len=datas.length;i<len;i++){
+          var len=datas.length;
+          var renderPointNum=that.miniRenderPointNum=540/minBlock+1;
+          var startIndex=that.miniStartIndex=datas.length-renderPointNum;//mini图的起始索引。
+          var endIndex=startIndex+renderPointNum;
+          var xGap=that.miniXGap=(that.width-20)/(renderPointNum-1);
+          var preYear=1900;
+
+          for(var i=0;i<len;i++){
             var miniPoint={};
             var data=datas[i];
-            var xAxis=beginX+i*xGap;
             var yAxis=that.grooveBaseLine+that.minibarBaseLine-that.range({start:minCurrent,end:maxCurrent},{start:that.minibarBaseLine+3,end:that.grooveBaseLine-3})(data.current);//减3是为了避免距离变现太近。
+            miniPoint.yAxis=yAxis;
+            miniPoint.time=data.time;
             var timespan=Date.parse(data.time);
             //坐标和时间对应。
-            miniPoint[timespan]=xAxis;
-            miniPoint[xAxis]=timespan;
             miniPoint.timespan=timespan;
-            miniPoint.xAxis=xAxis;
-            pathArray=pathArray.concat(xAxis,yAxis);
-            if(!i){
-              pathArray.push("L");
+            if(i>=startIndex&&i<=endIndex){
+              
+              var xAxis=beginX+(i-startIndex)*xGap;
+              miniPoint.xAxis=xAxis;
+              if(i!=startIndex){
+                pathArray.push("L");
+              }
+              pathArray=pathArray.concat(xAxis,yAxis);
+              var year=new Date(data.time).getFullYear();
+              if(year!=preYear&&preYear!==1999){
+                preYear=year;
+                that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.volumeEndLine]).attr({stroke:"#f1f1f1"})//时间线
+                that.paper.text(xAxis+12,that.grooveBaseLine-8,year);
+                console.log(xAxis);
+              }
             }
             that.miniPointList.push(miniPoint);
           }
-          that.paper.path(pathArray).attr({stroke:"#4572A7","stroke-width":"1"});
+          that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#4572A7","stroke-width":"1"});
         }
       })
+    },
+    drawMiniChartLine:function(){
+      if(this.miniStartIndex==-10){//目前如果是10的话，就表示拉到头了。
+        this.miniStartIndex=0;
+        return false;
+      }
+      if(this.miniStartIndex<0){
+        this.miniStartIndex=0;
+      }
+      var preYear=1999;
+      var pathArray=["M"];
+      var beginX=10;
+      var that=this;
+      var startIndex=this.miniStartIndex;
+      var endIndex=startIndex+this.miniRenderPointNum;
+      for(var i=0,len=this.miniPointList.length;i<len;i++){
+        var point=this.miniPointList[i];
+        if(i>=startIndex&&endIndex){
+          var xAxis=beginX+(i-startIndex)*this.miniXGap;
+          this.miniPointList[i].xAxis=xAxis;
+          if(i!=startIndex){
+            pathArray.push("L");
+          }
+          pathArray=pathArray.concat(xAxis,point.yAxis);
+          var year=new Date(point.time).getFullYear();
+          if(year!=preYear&&preYear!==1999){
+            preYear=year;
+            that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.volumeEndLine]).attr({stroke:"#f1f1f1"})//时间线
+            that.paper.text(xAxis+12,that.grooveBaseLine-8,year);
+            console.log(xAxis);
+          }
+        }
+      }
+      that.miniChartLine.animate({path:pathArray.concat(" ")},1);
     },
     bindMoveEvent:function(){
       var that=this;
