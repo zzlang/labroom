@@ -169,6 +169,7 @@ var SNB={};
         if(that.trend){
           if(that.trend==="next"){
             renderData=datas.slice(1/point.ratioPre*datas.length*-1);
+            isSlice=true;
           }else{
             renderData=datas
           }
@@ -517,7 +518,19 @@ var SNB={};
       var that=this;
       var grooveBaseLine=this.minibarBaseLine+30;//miniBar底部槽的初始位置。
       var grooveEndLine=grooveBaseLine+10;//槽底部位置。
-      this.miniLine=this.paper.path(["M",0,vel,"L",x1,vel,"L",x1,grooveBaseLine,"L",x2,grooveBaseLine,"L",x2,vel,"L",this.width,vel]).toFront();
+      
+      var dragx=0;
+      this.miniLine=this.paper.path(["M",0,vel,"L",x1,vel,"L",x1,grooveBaseLine,"L",x2,grooveBaseLine,"L",x2,vel,"L",this.width,vel]).toFront().attr({"fill":"white"}).drag(
+        function(dx,dy,x,y,e){
+          move(dx,dx,true);
+          dragx=dx;
+        },function(){
+        
+        },function(){
+          that.x1+=dragx;
+          that.x2+=dragx;
+        }
+      );
       var originX1=x1;
       var originX2=x2;
       //两个拖动按钮
@@ -546,16 +559,19 @@ var SNB={};
       }
 
       function onstart(x,y,e){
-        console.log(x);
-        console.log(y);
+        console.log(that.x1);
+        console.log(that.x2);
+        return false;
       }
 
       function onleftend(dx,dy,x,y,e){
         that.x1+=leftdx;
+        leftdx=0;//因为点击事件也会触发拖动。
         endAction();
       }
       function onrightend(dx,dy,x,y,e){
         that.x2+=rightdx;
+        rightdx=0;
         endAction();
       }
       function endAction(){//抽象出俩
@@ -579,20 +595,24 @@ var SNB={};
             move(0,0);
           }
         }
+        return false;
       }
-      function move(dx1,dx2){
+      function move(dx1,dx2,isDragBlock){
         that.miniLine.animate({path:["M",0,vel,"L",that.x1+dx1,vel,"L",that.x1+dx1,grooveBaseLine,"L",that.x2+dx2,grooveBaseLine,"L",that.x2+dx2,vel,"L",that.width,vel].concat("")},1);
         that.miniBlock.animate({path:["M",that.x1+dx1,grooveBaseLine,"L",that.x2+dx2,that.grooveBaseLine,"L",that.x2+dx2,grooveEndLine,"L",that.x1+dx1,grooveEndLine,"Z"].concat("")},1);
         if(dx1&&dx2){//同时存在说明是点击下边槽的移动
           leftCircle.animate({cx:that.x1+dx1},1);
           rightCircle.animate({cx:that.x2+dx1},1);
-          that.x1+=dx1;
-          that.x2+=dx2;
+          if(!isDragBlock){
+            that.x1+=dx1;
+            that.x2+=dx2;
+          }
         }
         if(!dx1&&!dx2){//交叉的情况，两个原点交换位置。
-          leftCircle.animate({cx:x1},1)
-          rightCircle.animate({cx:x2},1)
+          leftCircle.animate({cx:that.x1},1)
+          rightCircle.animate({cx:that.x2},1)
         }
+        that.moveCurrent();
         return false;
       }
 
@@ -606,8 +626,43 @@ var SNB={};
       //底部的拖动槽
       this.paper.path(["M",0,grooveBaseLine,"L",this.width-10,grooveBaseLine,"L",this.width-10,grooveEndLine,"L",0,grooveEndLine,"Z"]);
       //滑动块。
-      that.miniBlock=this.paper.path(["M",x1,grooveBaseLine,"L",x2,this.grooveBaseLine,"L",x2,grooveEndLine,"L",x1,grooveEndLine,"Z"]).attr({"fill":"#f1f1f1"});
+      that.miniBlock=this.paper.path(["M",x1,grooveBaseLine,"L",x2,this.grooveBaseLine,"L",x2,grooveEndLine,"L",x1,grooveEndLine,"Z"]).attr({"fill":"#f1f1f1"}).drag(
+        function(dx,dy,x,y,e){
+          move(dx,dx,true);
+          dragx=dx;
+        },function(){
+        
+        },function(){
+          that.x1+=dragx;
+          that.x2+=dragx;
+        }
+      );
       //还有左右两块path遮罩层。
+    },
+    moveCurrent:function(){
+      var that=this;
+      var x1=that.x1;
+      var x2=that.x2;
+      var miniPointList=that.miniPointList;
+      var beginPoint,endPoint;
+
+      for(var i=0,len=miniPointList.length;i<len;i++){
+        var point=miniPointList[i];
+        if(point.xAxis>x1){
+          if(!beginPoint){
+            beginPoint=point;
+          }
+          if(point.xAxis>x2&&!endPoint){
+            endPoint=point;
+            break;
+          }
+        }
+      }
+      if(!endPoint){
+        endPoint=miniPointList[len-1];
+      }
+
+
     },
     drawMinibar:function(){
       this.drawMinibarBase(535,550);
@@ -649,7 +704,13 @@ var SNB={};
     },
     bindMoveEvent:function(){
       var that=this;
-      var offsetX=$("#"+that.container).find("svg").offset().left;
+      var offsetX;
+      var el=$("#"+that.container).find("svg");
+      if(el.length){
+        offsetX=$("#"+that.container).find("svg").offset().left;
+      }else{
+        offsetX=$("#"+that.container).find("div").offset().left;
+      }
       this.upRect.mousemove(function(e){
         if(that.tempCircle&&!that.tempCircle.removed){
           that.tempCircle.remove();
@@ -742,7 +803,11 @@ var SNB={};
       var that=this,
           base=0,
           spliceNum=that.spliceNum;
-      $("#"+this.options.container).find("svg").bind("mousewheel",function(e,delta){
+      var el=$("#"+that.container).find("svg");
+      if(!el.length){
+        el=$("#"+that.container).find("div");
+      }
+      el.bind("mousewheel",function(e,delta){
         var offsetY=$(this).offset().top;
         if(e.pageY-offsetY<that.volumeEndLine){
           var zoomOut,zoomIn,ratio,flag;
