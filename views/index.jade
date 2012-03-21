@@ -69,8 +69,9 @@ html
         })
 
         var paper=new Raphael("stock1",200,200);
-        var x=20;
+        var x=20,dx;
         var circle=paper.circle(x,20,10).attr({fill:"red"}).drag(function(dx,dy){
+          circle.animate({cx:x+dx})
           console.log(dx,dy);
         })
       })

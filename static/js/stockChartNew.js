@@ -520,8 +520,38 @@ var SNB={};
       var grooveEndLine=grooveBaseLine+10;//槽底部位置。
       
       var dragx=0;
+      var leftInterval,rightInterval;
       this.miniLine=this.paper.path(["M",0,vel,"L",x1,vel,"L",x1,grooveBaseLine,"L",x2,grooveBaseLine,"L",x2,vel,"L",this.width,vel]).toFront().attr({"fill":"white"}).drag(
         function(dx,dy,x,y,e){
+          if(that.x1+dx<=10||that.x2+dx>=550){
+            return false;
+          }
+          if((that.miniStartIndex<=0||that.x1+dx>50)&&leftInterval){//index为0活着移出缓动区
+            console.log("clear left");
+            window.clearInterval(leftInterval);
+            leftInterval=0;
+          }
+          if((that.miniStartIndex+that.miniRenderPointNum>=that.miniPointList.length||that.x2+dx<520)&&rightInterval){
+            console.log("clear right");
+            window.clearInterval(rightInterval);
+            rightInterval=0;
+          }
+          if(that.x1+dx<=50&&that.miniStartIndex!=0&&!leftInterval){
+            console.log("bind");
+            console.log(leftInterval);
+            console.log(that.miniStartIndex);
+            leftInterval=setInterval(function(){
+              that.miniStartIndex-=10;
+              that.drawMiniChartLine(that.miniStartIndex);
+            },100);
+          }
+          if(that.x2+dx>=520&&that.miniStartIndex+that.miniRenderPointNum<that.miniPointList.length&&!rightInterval){
+            console.log("bind right");
+            rightInterval=setInterval(function(){
+              that.miniStartIndex+=10;
+              that.drawMiniChartLine();
+            },100);
+          }
           move(dx,dx,true);
           dragx=dx;
         },function(){
@@ -618,10 +648,22 @@ var SNB={};
 
       //两个移动按钮
       this.paper.rect(0,this.grooveBaseLine,10,10).attr({"fill":"green"}).click(function(e){
-        move(-10,-10);
+        if(that.x1<20){
+          move(10-that.x1,10-that.x1);
+        }else{
+          if(that.x1!=10){
+            move(-10,-10);
+          }
+        }
       });
       this.paper.rect(this.width-10,grooveBaseLine,10,10).attr({"fill":"green"}).click(function(e){
-        move(10,10)
+        if(550-that.x2<10){
+          move(550-that.x2,550-that.x2);
+        }else{
+          if(that.x2!=550){
+            move(10,10)
+          }
+        }
         that.miniStartIndex-=10;
         that.drawMiniChartLine();
       });
@@ -667,7 +709,7 @@ var SNB={};
 
     },
     drawMinibar:function(){
-      this.drawMinibarBase(545,550);
+      this.drawMinibarBase(547,550);
       var options=this.options;
       var that=this;
       var minBlock=5;
@@ -683,12 +725,19 @@ var SNB={};
           //需要减去两边槽的宽度
           var beginX=10;
           var pathArray=["M"];
+          var tempDatas=that.originDatas[that.period];//把当前数据的最后一个添加到mini图中去。
+          var lastData=tempDatas[tempDatas.length-1];
+          datas.push(lastData);
           var len=datas.length;
           var renderPointNum=that.miniRenderPointNum=540/minBlock+1;
           var startIndex=that.miniStartIndex=datas.length-renderPointNum;//mini图的起始索引。
           var endIndex=startIndex+renderPointNum;
           var xGap=that.miniXGap=(that.width-20)/(renderPointNum-1);
           var preYear=1900;
+
+
+          that.miniTimeText=that.paper.set();
+          that.miniTimeLine=that.paper.set();
 
           for(var i=0;i<len;i++){
             var miniPoint={};
@@ -710,8 +759,11 @@ var SNB={};
               var year=new Date(data.time).getFullYear();
               if(year!=preYear&&preYear!==1999){
                 preYear=year;
-                that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.volumeEndLine]).attr({stroke:"#f1f1f1"})//时间线
-                that.paper.text(xAxis+12,that.grooveBaseLine-8,year);
+                var line=that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.volumeEndLine]).attr({stroke:"#f1f1f1"})//时间线
+                that.miniTimeLine.push(line);
+                var text=that.paper.text(xAxis+12,that.grooveBaseLine-8,year);
+                that.miniTimeText.push(text);
+
                 console.log(xAxis);
               }
             }
@@ -729,15 +781,22 @@ var SNB={};
       if(this.miniStartIndex<0){
         this.miniStartIndex=0;
       }
+      if(this.miniStartIndex+this.miniRenderPointNum>this.miniPointList.length){
+        this.miniStartIndex=this.miniPointList.length-this.miniRenderPointNum;
+      }
       var preYear=1999;
       var pathArray=["M"];
       var beginX=10;
       var that=this;
       var startIndex=this.miniStartIndex;
       var endIndex=startIndex+this.miniRenderPointNum;
+      that.miniTimeText.remove();
+      that.miniTimeLine.remove();
+      that.miniTimeText=that.paper.set();
+      that.miniTimeLine=that.paper.set();
       for(var i=0,len=this.miniPointList.length;i<len;i++){
         var point=this.miniPointList[i];
-        if(i>=startIndex&&endIndex){
+        if(i>=startIndex&&i<endIndex){
           var xAxis=beginX+(i-startIndex)*this.miniXGap;
           this.miniPointList[i].xAxis=xAxis;
           if(i!=startIndex){
@@ -747,8 +806,10 @@ var SNB={};
           var year=new Date(point.time).getFullYear();
           if(year!=preYear&&preYear!==1999){
             preYear=year;
-            that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.volumeEndLine]).attr({stroke:"#f1f1f1"})//时间线
-            that.paper.text(xAxis+12,that.grooveBaseLine-8,year);
+            var line=that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.volumeEndLine]).attr({stroke:"#f1f1f1"})//时间线
+            var text=that.paper.text(xAxis+12,that.grooveBaseLine-8,year);
+            that.miniTimeText.push(text);
+            that.miniTimeLine.push(line);
             console.log(xAxis);
           }
         }
