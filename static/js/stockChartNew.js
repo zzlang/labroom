@@ -187,7 +187,7 @@ var SNB={};
       }
 
     },
-    wrapData:function(dataList,isSlice){
+    wrapData:function(dataList,isSlice,slice){
       var that=this;
       var datas=_.reject(dataList,function(data){//剔除错误的数据
         return data.current==0;
@@ -221,9 +221,16 @@ var SNB={};
       }else{
         pCount=options.period==="1d"?options["dayPointsCount_"+options.stockType]:(dataList.length-1);
       }
-      this.pCount=pCount;
-      var xGap=this.width/pCount;
-      for(var i=0;i<pCount;i++){
+      this.pCount=pCount+1;
+      var xGap,
+          beginx=0;
+      if(slice){
+        xGap=this.width/(pCount-slice.left-slice.right);
+        beginx=0-slice.left*xGap;
+      }else{
+        xGap=this.width/pCount;
+      }
+      for(var i=0;i<pCount+1;i++){
         var data=datas[i],
             point=$.extend({},data);
 
@@ -255,8 +262,8 @@ var SNB={};
             }
           }
           point.timespan=Date.parse(point.time);
-          point.currentXAxis=i*xGap;
-          point.volumeXAris=i*xGap;
+          point.currentXAxis=beginx+i*xGap;
+          point.volumeXAris=beginx+i*xGap;
           point.currentYAxis=that.timeBaseLine+that.currentBaseLine-that.range(currentYLableInfo.dataRange,{start:this.currentBaseLine,end:this.currentBaseLine+this.currentHeight})(data.current);
           point.volumeYAxis=that.minibarBaseLine+that.volumeBaseLine-that.volumeMiniInterval-that.range(volumeYLableInfo.dataRange,{start:this.volumeBaseLine,end:this.volumeBaseLine+this.volumeHeight})(data.volume);
           dataSet.pointsList.push(point);
@@ -380,7 +387,7 @@ var SNB={};
       this.mousewheel(dataObj);
       this.drawMinibar();
     },
-    reDraw:function(dataObj){
+    reDraw:function(dataObj,noMini){
       var that=this;
       if(that.tempCircle&&!that.tempCircle.removed){
         that.tempCircle.remove();
@@ -399,6 +406,10 @@ var SNB={};
       this.currentLine.remove();
       this.drawLabel(dataObj);
       this.drawChart(dataObj);
+
+      if(noMini){
+        return false;
+      }
 
       //reDraw minibar
       var points=dataObj.pointsList;
@@ -559,6 +570,56 @@ var SNB={};
         },function(){
           that.x1+=dragx;
           that.x2+=dragx;
+          //先不管逻辑了，想到哪写到呢，功能实现之后再看逻辑
+          //遍历minirender数据，取到时间范围，精确到某一天.
+          var renderMiniPointList=that.renderMiniPointList;
+          for(var i=0,len=renderMiniPointList.length;i<len;i++){
+            var point=renderMiniPointList[i];
+            var beginPoint,endPoint;
+
+            if(point.xAxis>=that.x1){
+              if(!beginPoint){
+                beginPoint=renderMiniPointList[i-1];
+              }
+              if(point.xAxis>=that.x2){
+                if(!endPoint){
+                  endPoint=point;
+                  break;
+                }
+              }
+            }
+          }
+
+          var beginTime={timespan:beginPoint.timespan,extra:(that.x1-beginPoint.xAxis)/5};
+          var endTime={timespan:endPoint.timespan,extra:(endPoint.xAxis-that.x2)/5};
+          var slice={left:beginTime.extra,right:endTime.extra};
+
+          that.period="10y";
+
+          var renderDatas=[];
+          var currentDatas=that.originDatas[that.period];
+          for(var i=0,len=currentDatas.length;i<len;i++){
+            var d=currentDatas[i];
+            var timespan=Date.parse(d.time);
+            console.log(timespan);
+            if(timespan>=beginTime.timespan&&timespan<=endTime.timespan){
+              renderDatas.push(d);
+              if(timespan==beginTime.timespan){
+                that.spliceNum=i;
+
+              }
+              if(timespan==endTime.timespan){
+                that.currentEndIndex=i;
+              }
+            }
+          }
+          var obj=that.wrapData(renderDatas,true,slice);
+          that.dataSet=obj;
+          that.reDraw(obj,true);
+          console.log(renderDatas);
+
+          console.log(beginTime);
+          console.log(endTime);
         }
       );
       var originX1=x1;
@@ -709,14 +770,15 @@ var SNB={};
 
     },
     drawMinibar:function(){
-      this.drawMinibarBase(547,550);
       var options=this.options;
       var that=this;
       var minBlock=5;
       that.miniPointList=[];
+      that.renderMiniPointList=[];
       $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:"5y"},function(ret){
         if(ret.message&&ret.message.code=="0"){
           var datas=ret.chartlist;
+          that.originDatas["10y"]=datas;
           var currentList=_.pluck(datas,"current");
           var volumeList=_.pluck(datas,"volume");
 
@@ -727,13 +789,30 @@ var SNB={};
           var pathArray=["M"];
           var tempDatas=that.originDatas[that.period];//把当前数据的最后一个添加到mini图中去。
           var lastData=tempDatas[tempDatas.length-1];
-          datas.push(lastData);
           var len=datas.length;
+          var lastMiniData=datas[len-1];
           var renderPointNum=that.miniRenderPointNum=540/minBlock+1;
           var startIndex=that.miniStartIndex=datas.length-renderPointNum;//mini图的起始索引。
           var endIndex=startIndex+renderPointNum;
           var xGap=that.miniXGap=(that.width-20)/(renderPointNum-1);
           var preYear=1900;
+          var time1=lastData.time.split(" ");
+          var time2=lastMiniData.time.split(" ");
+          var week1=time1[0];
+          var week2=time2[0];
+
+          var date1=time1[2];
+          var date2=time2[2];
+          var extraWidth=0;
+
+          week1="Tue"
+
+          var weekToWidth={Mon:0,Tue:0.8,Wed:0.6,Thu:0.4,Fri:0.2};//计算额外的所占的宽度。
+          if(date1!=date2||week1!=week2){
+            extraWidth=weekToWidth[week1]*minBlock;
+            datas.push(lastData);
+          }
+          that.drawMinibarBase(550-minBlock-extraWidth,550);
 
 
           that.miniTimeText=that.paper.set();
@@ -745,6 +824,8 @@ var SNB={};
             var yAxis=that.grooveBaseLine+that.minibarBaseLine-that.range({start:minCurrent,end:maxCurrent},{start:that.minibarBaseLine+3,end:that.grooveBaseLine-3})(data.current);//减3是为了避免距离变现太近。
             miniPoint.yAxis=yAxis;
             miniPoint.time=data.time;
+            miniPoint.current=data.current;
+            miniPoint.volume=data.volume;
             var timespan=Date.parse(data.time);
             //坐标和时间对应。
             miniPoint.timespan=timespan;
@@ -766,6 +847,7 @@ var SNB={};
 
                 console.log(xAxis);
               }
+              that.renderMiniPointList.push(miniPoint);
             }
             that.miniPointList.push(miniPoint);
           }
@@ -794,6 +876,7 @@ var SNB={};
       that.miniTimeLine.remove();
       that.miniTimeText=that.paper.set();
       that.miniTimeLine=that.paper.set();
+      that.renderMiniPointList=[];
       for(var i=0,len=this.miniPointList.length;i<len;i++){
         var point=this.miniPointList[i];
         if(i>=startIndex&&i<endIndex){
@@ -812,6 +895,7 @@ var SNB={};
             that.miniTimeLine.push(line);
             console.log(xAxis);
           }
+          that.renderMiniPointList.push(point);
         }
       }
       that.miniChartLine.animate({path:pathArray.concat(" ")},1);
@@ -923,6 +1007,7 @@ var SNB={};
       }
       el.bind("mousewheel",function(e,delta){
         var offsetY=$(this).offset().top;
+        var spliceNum=that.spliceNum;
         if(e.pageY-offsetY<that.volumeEndLine){
           var zoomOut,zoomIn,ratio,flag;
           if(that.isLoading){
@@ -947,8 +1032,12 @@ var SNB={};
 
           var datas=that.originDatas[that.period];
           var increaseNum=that.options.zoomRatio*that.pCount;
-          spliceNum+=increaseNum*flag;
-          var newDatas=datas.slice(spliceNum),
+          spliceNum+=Math.floor(increaseNum*flag);
+          var num;
+          if(that.currentEndIndex){
+            num=that.currentEndIndex-spliceNum;
+          }
+          var newDatas=num?datas.slice(spliceNum,that.currentEndIndex):datas.slice(spliceNum),
               point=that.transformPoint[that.period];
           if(flag<0){
             that.trend="next";// 变幻的趋势，向下走 增大
