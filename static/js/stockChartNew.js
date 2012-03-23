@@ -219,18 +219,20 @@ var SNB={};
           pCount=options["pointsCount_5d_"+options.stockType];
         }
       }else{
-        pCount=options.period==="1d"?options["dayPointsCount_"+options.stockType]:(dataList.length-1);
+        pCount=options.period==="1d"?options["dayPointsCount_"+options.stockType]:(dataList.length);
       }
-      this.pCount=pCount+1;
+      this.pCount=pCount;
       var xGap,
           beginx=0;
       if(slice){
-        xGap=this.width/(pCount-slice.left-slice.right);
+        xGap=this.width/(pCount-1-slice.left-slice.right);
         beginx=0-slice.left*xGap;
       }else{
-        xGap=this.width/pCount;
+        xGap=this.width/(pCount-1);
       }
-      for(var i=0;i<pCount+1;i++){
+      that.xGap=xGap;
+      that.slice=slice;
+      for(var i=0;i<pCount;i++){
         var data=datas[i],
             point=$.extend({},data);
 
@@ -462,7 +464,69 @@ var SNB={};
       }
     },
     drawBase:function(){
+      var that=this;
       this.upRect=this.paper.path(["M",0,this.volumeEndLine,"L",0,0,"L",this.width,0,"L",this.width,this.volumeEndLine]).attr({fill:"white"});//上部外框
+      this.upRect.drag(function(dx,dy,x,y,e){
+        that.x1+=dx/10;
+        that.x2+=dx/10;
+        //先不管逻辑了，想到哪写到呢，功能实现之后再看逻辑
+        //遍历minirender数据，取到时间范围，精确到某一天.
+        var renderMiniPointList=that.renderMiniPointList;
+        for(var i=0,len=renderMiniPointList.length;i<len;i++){
+          var point=renderMiniPointList[i];
+          var beginPoint,endPoint;
+
+          if(point.xAxis>=that.x1){
+            if(!beginPoint){
+              beginPoint=renderMiniPointList[i-1];
+            }
+            if(point.xAxis>=that.x2){
+              if(!endPoint){
+                endPoint=point;
+                break;
+              }
+            }
+          }
+        }
+
+        var beginTime={timespan:beginPoint.timespan,extra:(that.x1-beginPoint.xAxis)/5};
+        var endTime={timespan:endPoint.timespan,extra:(endPoint.xAxis-that.x2)/5};
+        var slice={left:beginTime.extra,right:endTime.extra};
+
+        that.period="10y";
+
+        var renderDatas=[];
+        var currentDatas=that.originDatas[that.period];
+        for(var i=0,len=currentDatas.length;i<len;i++){
+          var d=currentDatas[i];
+          var timespan=Date.parse(d.time);
+          console.log(timespan);
+          if(timespan>=beginTime.timespan&&timespan<=endTime.timespan){
+            renderDatas.push(d);
+            if(timespan==beginTime.timespan){
+              that.spliceNum=i;
+
+            }
+            if(timespan==endTime.timespan){
+              that.currentEndIndex=i;
+            }
+          }
+        }
+        var obj=that.wrapData(renderDatas,true,slice);
+        that.dataSet=obj;
+        that.reDraw(obj);
+        console.log(renderDatas);
+
+        console.log(beginTime);
+        console.log(endTime);
+
+        that.x1-=dx/10;
+        that.x2-=dx/10;
+      
+      },function(){
+      },function(){
+      
+      })
       //this.minibarRect=this.paper.rect(0,this.minibarBaseLine,this.width,this.minibarHeight);//minibar外框
       //this.stateRect=this.paper.rect(0,this.stateBaseLine,this.width,this.stateHeight);//状态框
       this.paper.path(["M",0,this.stateHeight,"L",this.width,this.stateHeight]);
@@ -1030,9 +1094,28 @@ var SNB={};
           }
           ratio=that.options.zoomRatio;
 
+
+
           var datas=that.originDatas[that.period];
+          if(that.slice){
+            var moveTimeRatio=that.width*ratio/that.xGap;
+            var timespanInterval=that.dataSet.pointsList[1].timespan-that.dataSet.pointsList[0].timespan;
+
+            var moveTime=moveTimeRatio*timespanInterval;
+            var leftBeginTime=that.dataSet.pointsList[0].timespan+timespanInterval*that.slice.left;
+            var newLeftBeginTime=leftBeginTime+moveTime*flag;
+            var tempnum=(that.dataSet.pointsList[1].timespan-newLeftBeginTime)/timespanInterval;
+
+            var moveNum=Math.ceil(tempnum);
+            that.spliceNum=that.spliceNum-(moveNum-1);
+            that.slice.left=moveNum-tempnum;
+            var tempdatas=datas.slice(that.spliceNum,that.currentEndIndex+1);
+            that.dataSet=that.wrapData(tempdatas,true,that.slice);
+            that.reDraw(that.dataSet);
+            return false;
+          }
           var increaseNum=that.options.zoomRatio*that.pCount;
-          spliceNum+=Math.floor(increaseNum*flag);
+          that.spliceNum+=Math.floor(increaseNum*flag);
           var num;
           if(that.currentEndIndex){
             num=that.currentEndIndex-spliceNum;
