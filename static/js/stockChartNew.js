@@ -134,7 +134,8 @@ var SNB={};
         ratioNext:"",
         ratioPre:20/1
       }
-    }
+    };
+    this.beginTimespanTable={};
     this.originDatas={};
     var that=this;
     this.getData(function(data){
@@ -161,6 +162,7 @@ var SNB={};
 
       function handler(datas){//处理接下来需要渲染的数据
         that.originDatas[that.period]=datas;
+        //that.beginTimespanTable[that.period]=Date.parse(datas[0].time);
         var renderData,
             wrapCount,
             isSlice=false;//是否截取
@@ -446,6 +448,7 @@ var SNB={};
           miniEndXaris=550;
         }
         var x2;
+        console.log(that.x2);
 
         
         var perTimeWidth=(miniEndXaris-miniBeginXaris)/(miniEndTimespan-miniBeginTimespan);
@@ -459,6 +462,7 @@ var SNB={};
           }
           that.x1=x1;
           that.x2=x2;
+          console.log("last x2:"+that.x2);
           that.reDrawMiniLine(x1,x2);
         }
       }
@@ -466,9 +470,13 @@ var SNB={};
     drawBase:function(){
       var that=this;
       this.upRect=this.paper.path(["M",0,this.volumeEndLine,"L",0,0,"L",this.width,0,"L",this.width,this.volumeEndLine]).attr({fill:"white"});//上部外框
+      var tempdx=0;
       this.upRect.drag(function(dx,dy,x,y,e){
-        that.x1+=dx/10;
-        that.x2+=dx/10;
+        var increase=tempdx=(dx/6)*-1;
+        console.log("origin x1:"+that.x1);
+        console.log("origin x2:"+that.x2);
+        that.x1+=increase;
+        that.x2+=increase;
         //先不管逻辑了，想到哪写到呢，功能实现之后再看逻辑
         //遍历minirender数据，取到时间范围，精确到某一天.
         var renderMiniPointList=that.renderMiniPointList;
@@ -500,12 +508,10 @@ var SNB={};
         for(var i=0,len=currentDatas.length;i<len;i++){
           var d=currentDatas[i];
           var timespan=Date.parse(d.time);
-          console.log(timespan);
           if(timespan>=beginTime.timespan&&timespan<=endTime.timespan){
             renderDatas.push(d);
             if(timespan==beginTime.timespan){
               that.spliceNum=i;
-
             }
             if(timespan==endTime.timespan){
               that.currentEndIndex=i;
@@ -514,18 +520,22 @@ var SNB={};
         }
         var obj=that.wrapData(renderDatas,true,slice);
         that.dataSet=obj;
-        that.reDraw(obj);
+        that.reDraw(obj,true);
+        that.reDrawMiniLine(that.x1,that.x2);
         console.log(renderDatas);
 
         console.log(beginTime);
         console.log(endTime);
 
-        that.x1-=dx/10;
-        that.x2-=dx/10;
-      
+        that.x1-=increase;
+        that.x2-=increase;
       },function(){
       },function(){
-      
+        that.x1+=tempdx;
+        that.x2+=tempdx;
+        console.log("tempdx:"+tempdx);
+        console.log(that.x1);
+        console.log(that.x2);
       })
       //this.minibarRect=this.paper.rect(0,this.minibarBaseLine,this.width,this.minibarHeight);//minibar外框
       //this.stateRect=this.paper.rect(0,this.stateBaseLine,this.width,this.stateHeight);//状态框
@@ -665,7 +675,6 @@ var SNB={};
           for(var i=0,len=currentDatas.length;i<len;i++){
             var d=currentDatas[i];
             var timespan=Date.parse(d.time);
-            console.log(timespan);
             if(timespan>=beginTime.timespan&&timespan<=endTime.timespan){
               renderDatas.push(d);
               if(timespan==beginTime.timespan){
