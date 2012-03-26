@@ -30,7 +30,7 @@ var SNB={};
       },//1d 5d 1m
       stockType:"$Stock",//stock type --a-stock||hk-stock||$stock
       symbol:"BIDU",
-      period:"5d",//chartType
+      period:"10d",//chartType
       periodIndex:1,//period indexOf periodSeries
       initDays:3,
       apiKey:"47bce5c74f",
@@ -88,35 +88,37 @@ var SNB={};
     this.transformPoint={
       "1d":{
         pre:"",
-        next:"5d",
+        next:"10d",
         toNext:200,
         toPre:"",
         ratioNext:1/5,
         ratioPre:""
       },
-      "5d":{
-        pre:"1d",
-        next:"10d",
-        toNext:200,
-        toPre:40,
-        ratioNext:5/10,
-        ratioPre:5/1
-      },
+      /*
+       *"5d":{
+       *  pre:"1d",
+       *  next:"10d",
+       *  toNext:200,
+       *  toPre:40,
+       *  ratioNext:5/10,
+       *  ratioPre:5/1
+       *},
+       */
       "10d":{
-        pre:"5d",
-        next:"1m",
-        toNext:200,
-        toPre:100,
-        ratioNext:10/23,
-        ratioPre:10/5
+        pre:"1d",
+        next:"30d",
+        toNext:400,
+        toPre:40,
+        ratioNext:10/30,
+        ratioPre:10/1
       },
-      "1m":{
+      "30d":{
         pre:"10d",
         next:"6m",
-        toNext:200,
-        toPre:100,
-        ratioNext:1/6,
-        ratioPre:23/10
+        toNext:420,
+        toPre:140,
+        ratioNext:30/123,
+        ratioPre:30/10
       },
       "6m":{
         pre:"1m",
@@ -135,7 +137,7 @@ var SNB={};
         ratioPre:20/1
       }
     };
-    this.beginTimespanTable={};
+    this.beginTimespanTable=[];
     this.originDatas={};
     var that=this;
     this.getData(function(data){
@@ -152,10 +154,22 @@ var SNB={};
         handler(that.originDatas[that.period]);
       }else{
         that.isLoading=true;
-        $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:that.period},function(ret){
+        var period=that.period=="10d"?"30d":that.period;
+
+        $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:period},function(ret){
           if(ret.message&&ret.message.code=="0"){
             that.isLoading=false;
-            handler(ret.chartlist);
+            if(that.period=="10d"){
+              that.originDatas[that.period]=ret.chartlist.slice(-1*ret.chartlist.length/3);
+              that.originDatas["30d"]=_.filter(ret.chartlist,function(data){//半个小时为基准
+                return data.time.indexOf("00:00")>-1||data.time.indexOf("30:00")>-1;
+              });
+              that.beginTimespanTable.push({"period":"10d",timespan:Date.parse(that.originDatas["10d"][0].time)});
+              that.beginTimespanTable.push({period:"30d",timespan:Date.parse(that.originDatas["30d"][0].time)});
+              handler(that.originDatas["10d"]);
+            }else{
+              handler(ret.chartlist);
+            }
           }
         })
       }
@@ -177,9 +191,9 @@ var SNB={};
           }
           that.spliceNum=datas.length-renderData.length;
         }else{
-          wrapCount=options["pointsCount_5d_"+options.stockType];
-          renderData=datas.slice(options.initDays/5*(-1)*datas.length);
-          that.spliceNum=wrapCount-renderData.length;
+          //wrapCount=options["pointsCount_5d_"+options.stockType];
+          renderData=datas.slice(options.initDays/10*(-1)*datas.length);
+          that.spliceNum=datas.length-renderData.length;
           isSlice=true;
         }
 
@@ -496,12 +510,20 @@ var SNB={};
             }
           }
         }
+        console.log(beginPoint.time);
+        console.log(endPoint.time);
 
         var beginTime={timespan:beginPoint.timespan,extra:(that.x1-beginPoint.xAxis)/5};
         var endTime={timespan:endPoint.timespan,extra:(endPoint.xAxis-that.x2)/5};
         var slice={left:beginTime.extra,right:endTime.extra};
-
-        that.period="10y";
+        
+        for(var i=0,len=that.beginTimespanTable.length;i<len;i++){
+          var data=that.beginTimespanTable[i];
+          if(beginTime.timespan>data.timespan){
+            that.period=data.period;
+            break
+          }
+        }
 
         var renderDatas=[];
         var currentDatas=that.originDatas[that.period];
@@ -663,12 +685,20 @@ var SNB={};
               }
             }
           }
+          console.log(beginPoint.time);
+          console.log(endPoint.time);
 
           var beginTime={timespan:beginPoint.timespan,extra:(that.x1-beginPoint.xAxis)/5};
           var endTime={timespan:endPoint.timespan,extra:(endPoint.xAxis-that.x2)/5};
           var slice={left:beginTime.extra,right:endTime.extra};
 
-          that.period="10y";
+          for(var i=0,len=that.beginTimespanTable.length;i<len;i++){
+            var data=that.beginTimespanTable[i];
+            if(beginTime.timespan>data.timespan){
+              that.period=data.period;
+              break
+            }
+          }
 
           var renderDatas=[];
           var currentDatas=that.originDatas[that.period];
@@ -924,6 +954,7 @@ var SNB={};
             }
             that.miniPointList.push(miniPoint);
           }
+          that.beginTimespanTable.push({period:"10y",timespan:that.miniPointList[0].timespan});
           that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#4572A7","stroke-width":"1"});
         }
       })

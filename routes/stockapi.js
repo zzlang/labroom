@@ -90,6 +90,32 @@ module.exports=function(app){
         }
       
       }else{
+        if(period==="30d"){
+          try{
+            var obj=JSON.parse(data);
+            var list=obj.chartlist;
+
+            for(var i=0,len=list.length;i<len;i++){
+              var data=list[i];
+              if(data.volume==0){
+                var volume="11000";
+                var current=data.current;
+                var random=Math.random(),flag=0;
+                if(random>0.5){
+                  flag=1;
+                }else{
+                  flag=-1;
+                }
+                data.current=(parseFloat(current)+random*flag).toFixed(2);
+                data.volume=(parseFloat(volume)+volume*random*flag).toFixed(2);
+              }
+            }    
+            res.send(callback+"("+JSON.stringify(obj)+")");
+          }
+          catch(e){
+            console.log(e.stock||e.message);
+          }
+        }
         res.send(callback+"("+data+")");
       }
     })
