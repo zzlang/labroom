@@ -170,8 +170,16 @@ var SNB={};
             }else{
               handler(ret.chartlist);
             }
+
+            $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:"6m"},function(ret){
+              if(ret.message&&ret.message.code=="0"){
+                that.originDatas["6m"]=ret.chartlist;
+                that.beginTimespanTable.push({period:"6m",timespan:Date.parse(ret.chartlist[0].time)});
+              }
+            })
           }
         })
+
       }
 
       function handler(datas){//处理接下来需要渲染的数据
@@ -246,7 +254,12 @@ var SNB={};
       }else{
         xGap=this.width/(pCount-1);
       }
+      if(that.preGapPeriod){
+        var preGap=that.preGapPeriod.xGap;
+        var prePeriod=that.preGapPeriod.period;
+      }
       that.xGap=xGap;
+      that.preGapPeriod={xGap:that.xGap,period:that.period};
       that.slice=slice;
       for(var i=0;i<pCount;i++){
         var data=datas[i],
@@ -356,7 +369,6 @@ var SNB={};
             tick=2;
           }
         }
-
         return tick;
       }    
 
@@ -513,6 +525,8 @@ var SNB={};
         console.log(beginPoint.time);
         console.log(endPoint.time);
 
+        var miniTimespanInterval=renderMiniPointList[1].timespan-renderMiniPointList[0].timespan;
+
         var beginTime={timespan:beginPoint.timespan,extra:(that.x1-beginPoint.xAxis)/5};
         var endTime={timespan:endPoint.timespan,extra:(endPoint.xAxis-that.x2)/5};
         var slice={left:beginTime.extra,right:endTime.extra};
@@ -524,6 +538,11 @@ var SNB={};
             break
           }
         }
+        if(that.period!=="10y"){
+          beginTime.timespan=beginTime.timespan+miniTimespanInterval*beginTime.extra;
+          endTime.timespan=endTime.timespan-miniTimespanInterval*endTime.extra;
+        }
+        that.miniEndTimespan=endTime.timespan;
 
         var renderDatas=[];
         var currentDatas=that.originDatas[that.period];
@@ -669,6 +688,9 @@ var SNB={};
           //先不管逻辑了，想到哪写到呢，功能实现之后再看逻辑
           //遍历minirender数据，取到时间范围，精确到某一天.
           var renderMiniPointList=that.renderMiniPointList;
+
+          var miniTimespanInterval=renderMiniPointList[1].timespan-renderMiniPointList[0].timespan;
+
           for(var i=0,len=renderMiniPointList.length;i<len;i++){
             var point=renderMiniPointList[i];
             var beginPoint,endPoint;
@@ -692,6 +714,7 @@ var SNB={};
           var endTime={timespan:endPoint.timespan,extra:(endPoint.xAxis-that.x2)/5};
           var slice={left:beginTime.extra,right:endTime.extra};
 
+          //取最小的时间
           for(var i=0,len=that.beginTimespanTable.length;i<len;i++){
             var data=that.beginTimespanTable[i];
             if(beginTime.timespan>data.timespan){
@@ -700,20 +723,28 @@ var SNB={};
             }
           }
 
+          if(that.period!=="10y"){
+            beginTime.timespan=beginTime.timespan+miniTimespanInterval*beginTime.extra;
+            endTime.timespan=endTime.timespan-miniTimespanInterval*endTime.extra;
+          }
+          that.miniEndTimespan=endTime.timespan;
+
           var renderDatas=[];
           var currentDatas=that.originDatas[that.period];
+          var flag=true;
           for(var i=0,len=currentDatas.length;i<len;i++){
             var d=currentDatas[i];
             var timespan=Date.parse(d.time);
-            if(timespan>=beginTime.timespan&&timespan<=endTime.timespan){
+            if(timespan>=beginTime.timespan){
               renderDatas.push(d);
-              if(timespan==beginTime.timespan){
+              if(flag){
                 that.spliceNum=i;
-
+                flag=false;
               }
-              if(timespan==endTime.timespan){
-                that.currentEndIndex=i;
-              }
+            }
+            if(timespan>=endTime.timespan){
+              that.currentEndIndex=i;
+              break;
             }
           }
           var obj=that.wrapData(renderDatas,true,slice);
@@ -1137,6 +1168,19 @@ var SNB={};
 
 
           var datas=that.originDatas[that.period];
+          //最小是一天。
+          if(that.xGap/that.width>=5&&flag>0&&that.period=="10y"){
+            return false;
+          }
+          if(that.xGap/that.width>=1&&flag>0&&that.period=="6m"){
+            return false;
+          }
+          if(that.width/that.xGap<=13&&flag>0&&that.period=="30d"){
+            return false;
+          }
+          if(that.width/that.xGap<=40&&flag>0&&that.period=="10d"){
+            return false;
+          }
           if(that.slice){
             var moveTimeRatio=that.width*ratio/that.xGap;
             var timespanInterval=that.dataSet.pointsList[1].timespan-that.dataSet.pointsList[0].timespan;
@@ -1148,7 +1192,28 @@ var SNB={};
 
             var moveNum=Math.ceil(tempnum);
             that.spliceNum=that.spliceNum-(moveNum-1);
-            that.slice.left=moveNum-tempnum;
+            if(that.spliceNum<0){
+              that.period=that.transformPoint[that.period].next;
+              var currentDatas=that.originDatas[that.period];
+              var flag=true;
+              for(var i=0,len=currentDatas.length;i<len;i++){
+                var d=currentDatas[i];
+                var timespan=Date.parse(d.time);
+                if(timespan>=leftBeginTime){
+                  if(flag){
+                    that.spliceNum=i;
+                    flag=false;
+                  }
+                }
+                if(timespan>=that.endTimespan){
+                  that.currentEndIndex=i;
+                  break;
+                }
+              }
+              datas=currentDatas;
+            }else{
+              that.slice.left=moveNum-tempnum;
+            }
             var tempdatas=datas.slice(that.spliceNum,that.currentEndIndex+1);
             that.dataSet=that.wrapData(tempdatas,true,that.slice);
             that.reDraw(that.dataSet);
