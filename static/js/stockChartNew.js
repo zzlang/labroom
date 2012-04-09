@@ -1069,11 +1069,13 @@ var SNB={};
             if(xAxis<point.currentXAxis&&xAxis>=point.currentXAxis-gap){
               index=i;
             }
+
             if(index){
               that.tempCircle=that.paper.circle(point.currentXAxis,point.currentYAxis,3).attr({"stroke-width":"1",stroke:"#fff",fill:"#4572A7"});
               var text="time:"+point.time+"  current:"+point.current+"  volume:"+point.volume;
               that.stockInfo=that.paper.text(150,that.stateHeight/2,text);
               that.currentHline=that.paper.path(["M",point.currentXAxis,that.currentBaseLine,"L",point.currentXAxis,that.timeBaseLine]).attr({stroke:"#e3e3e3"})
+              break;//找到index之后及时退出循环
             }
           }    
         }
@@ -1178,9 +1180,12 @@ var SNB={};
           if(that.width/that.xGap<=13&&flag>0&&that.period=="30d"){
             return false;
           }
-          if(that.width/that.xGap<=40&&flag>0&&that.period=="10d"){
-            return false;
-          }
+          //判断这点还有些问题。。。
+          /*
+           *if(that.width/that.xGap<=40&&flag>0&&that.period=="10d"){
+           *  return false;
+           *}
+           */
           if(that.slice){
             var moveTimeRatio=that.width*ratio/that.xGap;
             var timespanInterval=that.dataSet.pointsList[1].timespan-that.dataSet.pointsList[0].timespan;
