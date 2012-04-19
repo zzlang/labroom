@@ -7,10 +7,17 @@ html
         width:800px;
         height:350px;
       }
-      #select{
-        margin:20 200;
+      .selectTime{
         overflow:hidden;
-
+        position:absolute;
+        font-size:10px;
+        width:567px;
+      }
+      #select{
+        overflow:hidden;
+        float:left;
+        margin:0px 0px;
+        padding:0px 0px;
       }
       #select li{
         float:left;
@@ -21,6 +28,13 @@ html
       #select li.selected{
         background:#f1f1f1;
       }
+      .selectTime #timeInterval{
+        float:right;
+      }
+      .selectTime #timeInterval input{
+        width:80px;
+        height:20px;
+      }
       #cutSVG{
         margin:auto;
         border:1px solid black;
@@ -29,17 +43,6 @@ html
         cursor:pointer;
       }
   body
-    ul#select
-      li#1d.selected 1d
-      li#5d 5d
-      li#1m 1m
-      li#3m 3m
-      li#6m 6m
-      li#1y 1y
-      li#3y 3y
-      li#5y 5y
-      li#10y 10y
-      li#30d 30d
     #stock.container
     #cutSVG 截图
     #stock1.container
@@ -56,24 +59,12 @@ html
       //var chart2=new SNB.stockChart({container:"stock1",symbol:"SH600768"});
       //var chart3=new SNB.stockChart({container:"stock2",symbol:"03888"});
       $(function(){
-        $("#select li").click(function(){
+        $("#select li").live("click",function(){
           $("#select li").removeClass("selected");
           $(this).addClass("selected");
           $("#stock").html("");
           var chart=new SNB.stockChart({container:"stock",period:this.id,symbol:chart1.options.symbol});
         })
-        $("#cutSVG").click(function(){
-          var html=$("#stock").html();
-          $.post("/toPng",{html:html},function(ret){
-            console.log(ret);
-          })
-        })
 
-        var paper=new Raphael("stock1",200,200);
-        var x=20,dx;
-        var circle=paper.circle(x,20,10).attr({fill:"red"}).drag(function(dx,dy){
-          circle.animate({cx:x+dx})
-          console.log(dx,dy);
-        })
       })
 

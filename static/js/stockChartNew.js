@@ -67,19 +67,22 @@ var SNB={};
     this.isLoading=true;
     //各个图块的起始坐标。
     this.stateBaseLine=0;
-    this.currentBaseLine=20;
-    this.timeBaseLine=220;
-    this.volumeBaseLine=235;
-    this.volumeEndLine=315;
-    this.minibarBaseLine=315;
+    this.currentBaseLine=25;
+    this.currentEndLine=160;
+    this.volumeBaseLine=165;
+    this.timeBaseLine=210;
+    this.volumeEndLine=210;
+    this.stimeBaseLine=230;
+    this.stimeEndLine=255;//stime 选择时间模块
+    this.minibarBaseLine=260;
 
-    this.grooveBaseLine=this.minibarBaseLine+30;//miniBar底部槽的初始位置。
+    this.grooveBaseLine=this.minibarBaseLine+26;//miniBar底部槽的初始位置。
     this.grooveEndLine=this.grooveBaseLine+14;//槽底部位置。
     //各个图块的高度
-    this.stateHeight=20;
-    this.currentHeight=200;
-    this.timeHeight=15;
-    this.volumeHeight=80;
+    this.stateHeight=25;
+    this.currentHeight=135;
+    this.timeHeight=50;
+    this.volumeHeight=45;
     this.volumeMiniInterval=0;
     this.minibarHeight=40;
 
@@ -228,7 +231,7 @@ var SNB={};
           minVolume=Math.min.apply(null,volumeList);
 
 
-      var currentYLableInfo=getLableY(minCurrent,maxCurrent,this.timeBaseLine,this.currentHeight,"current");    
+      var currentYLableInfo=getLableY(minCurrent,maxCurrent,this.currentEndLine,this.currentHeight,"current");    
       var volumeYLableInfo=getLableY(minVolume,maxVolume,this.volumeEndLine,this.volumeHeight,"volume");    
 
       dataSet.currentYLablesObj=currentYLableInfo.yLabelObjs;
@@ -333,8 +336,8 @@ var SNB={};
           point.timespan=Date.parse(point.time);
           point.currentXAxis=beginx+i*xGap;
           point.volumeXAris=beginx+i*xGap;
-          point.currentYAxis=that.timeBaseLine+that.currentBaseLine-that.range(currentYLableInfo.dataRange,{start:this.currentBaseLine,end:this.currentBaseLine+this.currentHeight})(data.current);
-          point.volumeYAxis=that.minibarBaseLine+that.volumeBaseLine-that.volumeMiniInterval-that.range(volumeYLableInfo.dataRange,{start:this.volumeBaseLine,end:this.volumeBaseLine+this.volumeHeight})(data.volume);
+          point.currentYAxis=that.currentEndLine+that.currentBaseLine-that.range(currentYLableInfo.dataRange,{start:this.currentBaseLine,end:this.currentBaseLine+this.currentHeight})(data.current);
+          point.volumeYAxis=that.volumeEndLine+that.volumeBaseLine-that.volumeMiniInterval-that.range(volumeYLableInfo.dataRange,{start:this.volumeBaseLine,end:this.volumeBaseLine+this.volumeHeight})(data.volume);
           dataSet.pointsList.push(point);
         }else{
           dataSet.pointsList.push(null);//如果总点数超过当前数据量，后面的点为null,在图上不画出来。
@@ -392,19 +395,19 @@ var SNB={};
       function getTick(baseNum,dataType){
         if(dataType=="current"){
           if(baseNum<4){
-            tick=0.5;
-          }else if(baseNum<8){
             tick=1;
-          }else{
+          }else if(baseNum<8){
             tick=2;
+          }else{
+            tick=3;
           } 
         }else{
           if(baseNum<3){
-            tick=0.5;
-          }else if(baseNum<5){
-            tick=1;
-          }else{
             tick=2;
+          }else if(baseNum<5){
+            tick=3;
+          }else{
+            tick=5;
           }
         }
         return tick;
@@ -453,6 +456,7 @@ var SNB={};
       this.drawChart(dataObj);
       this.bindMoveEvent();
       this.mousewheel(dataObj);
+      this.drawSelectTime();
       this.drawMinibar();
     },
     reDraw:function(dataObj,noMini){
@@ -535,7 +539,7 @@ var SNB={};
     },
     drawBase:function(){
       var that=this;
-      this.upRect=this.paper.path(["M",0,this.volumeEndLine,"L",0,0,"L",this.width,0,"L",this.width,this.volumeEndLine]).attr({fill:"white"});//上部外框
+      this.upRect=this.paper.path(["M",0.5,this.volumeEndLine+0.5,"L",0.5,0.5,"L",this.width+0.5,0.5,"L",this.width+0.5,this.volumeEndLine+0.5,"Z"]).attr({fill:"white","stroke-width":0});//上部外框
       var tempdx=0;
       this.upRect.drag(function(dx,dy,x,y,e){
         var increase=tempdx=(dx/6)*-1;
@@ -620,11 +624,11 @@ var SNB={};
       })
       //this.minibarRect=this.paper.rect(0,this.minibarBaseLine,this.width,this.minibarHeight);//minibar外框
       //this.stateRect=this.paper.rect(0,this.stateBaseLine,this.width,this.stateHeight);//状态框
-      this.paper.path(["M",0,this.stateHeight,"L",this.width,this.stateHeight]);
+      this.paper.path(["M",0.5,this.stateHeight+0.5,"H",this.width]).attr({"stroke-width":"0.3"});
       //this.currentRect=this.paper.rect(0,this.currentBaseLine,this.width,this.currentHeight);//current框
-      this.paper.path(["M",0,this.timeBaseLine,"L",this.width,this.timeBaseLine]);
+      this.paper.path(["M",0.5,this.timeBaseLine+0.5,"H",this.width]);
       //this.timeRect=this.paper.rect(0,this.timeBaseLine,this.width,this.timeHeight);//time框
-      this.paper.path(["M",0,this.volumeBaseLine,"L",this.width,this.volumeBaseLine]);
+      this.paper.path(["M",0.5,this.volumeBaseLine+0.5,"H",this.width]);
       //this.volumeRect=this.paper.path("M",0,this.volumeBaseLine,"L",this.width,this.volumeBaseLine,"L",this.width,this.minibarBaseLine);//volume框
     },
     drawLabel:function(dataSet){
@@ -675,7 +679,7 @@ var SNB={};
       this.currentLine=this.paper.path(pathArray).attr({stroke:"#4572A7","stroke-width":"1"});
     },
     reDrawMiniLine:function(x1,x2){
-      var vel=this.volumeEndLine;
+      var vel=this.minibarBaseLine;
       var that=this;
       var grooveBaseLine=this.minibarBaseLine+30;//miniBar底部槽的初始位置。
       var grooveEndLine=grooveBaseLine+10;//槽底部位置。
@@ -686,18 +690,57 @@ var SNB={};
       this.miniRightCircle.animate({x:x2-4},1);
       this.miniRightCircleLines.animate({path:["M",x2-1,vel+10,"L",x2-1,vel+20,"M",x2+1,vel+10,"L",x2+1,vel+20].concat("")});
     },
+    drawSelectTime:function(selectedId,start,end){
+      var that=this;
+      /*
+       *this.paper.rect(0.5,this.stimeBaseLine+0.5,355,20).attr({"stroke":"#e4e4e4"});
+       *var stimeSet=this.paper.set();
+       */
+
+      var html=''
+        + '<div class="selectTime">'
+          + '<ul id="select">'
+            + '<li id="1d">1天</li>'
+            + '<li id="5d">5天</li>'
+            + '<li id="1m">1月</li>'
+            + '<li id="3m">3月</li>'
+            + '<li id="6m">6月</li>'
+            + '<li id="1y">1年</li>' 
+            + '<li id="3y">3年</li>'
+            + '<li id="5y">5年</li>'
+            + '<li id="10y">10年</li>'
+            + '<li id="all">全部</li>'
+          + '</ul>'
+          + '<div id="timeInterval">'
+            + '<span>从&nbsp;<span><input type="text"/><span>&nbsp;至&nbsp;</span><input type="text"/>'
+          + '</div>'
+        + '</div>';  
+        var selectTime=$(html);
+        var container=$("#"+that.container);
+        var el=$("#"+that.container).find("svg");
+        var offsetX=0,offsetY=0;
+        if(el.length){
+          offsetX=container.find("svg").offset().left;
+          offsetY=container.find("svg").offset().top;
+        }else{
+          offsetX=container.find("div").offset().left;
+          offsetY=container.find("div").offset().top;
+        }
+        selectTime.appendTo($("body")).css({left:offsetX+"px",top:offsetY+that.stimeBaseLine+"px"})
+    },
     drawMinibarBase:function(x1,x2){
-      var vel=this.volumeEndLine;
+      //var vel=this.volumeEndLine;
+      var vel=this.minibarBaseLine;
       //方便事件交互，把他俩绑定到全局上。
       this.x1=x1;
       this.x2=x2;
       var that=this;
-      var grooveBaseLine=this.minibarBaseLine+30;//miniBar底部槽的初始位置。
-      var grooveEndLine=grooveBaseLine+14;//槽底部位置。
+      var grooveBaseLine=this.grooveBaseLine;//miniBar底部槽的初始位置。
+      var grooveEndLine=this.grooveEndLine;//槽底部位置。
       
       var dragx=0;
       var leftInterval,rightInterval;
-      this.miniLine=this.paper.path(["M",0,vel,"L",x1,vel,"L",x1,grooveBaseLine,"L",x2,grooveBaseLine,"L",x2,vel,"L",this.width,vel]).toFront().attr({"fill":"white",opacity:"0.3"}).drag(
+      this.miniLine=this.paper.path(["M",0,grooveBaseLine,"L",0,vel,"L",x1,vel,"L",x1,grooveBaseLine,"L",x2,grooveBaseLine,"L",x2,vel,"L",this.width,vel,"L",this.width,grooveBaseLine]).toFront().attr({stroke:"#f1f1f1"}).drag(
         function(dx,dy,x,y,e){
           if(that.x1+dx<=10||that.x2+dx>=550){
             return false;
@@ -906,26 +949,28 @@ var SNB={};
       this.paper.rect(0,grooveBaseLine,this.width,14).attr({fill:"#f5f5f5","stroke-width":1,"stroke":"#ECECEC"});
 
       //两个移动按钮
-      this.paper.rect(0,this.grooveBaseLine,14,14).attr({r:2,"stroke-width":1,"stroke":"#B9B9B9",fill:"#CACACA"}).click(function(e){
-        if(that.x1<20){
-          move(10-that.x1,10-that.x1);
-        }else{
-          if(that.x1!=10){
-            move(-10,-10);
-          }
-        }
-      });
-      this.paper.rect(this.width-14,grooveBaseLine,14,14).attr({r:2,"stroke-width":1,"stroke":"#B9B9B9",fill:"#CACACA"}).click(function(e){
-        if(550-that.x2<10){
-          move(550-that.x2,550-that.x2);
-        }else{
-          if(that.x2!=550){
-            move(10,10)
-          }
-        }
-        that.miniStartIndex-=10;
-        that.drawMiniChartLine();
-      });
+      /*
+       *this.paper.rect(0,this.grooveBaseLine,14,14).attr({r:2,"stroke-width":1,"stroke":"#B9B9B9",fill:"#CACACA"}).click(function(e){
+       *  if(that.x1<20){
+       *    move(10-that.x1,10-that.x1);
+       *  }else{
+       *    if(that.x1!=10){
+       *      move(-10,-10);
+       *    }
+       *  }
+       *});
+       *this.paper.rect(this.width-14,grooveBaseLine,14,14).attr({r:2,"stroke-width":1,"stroke":"#B9B9B9",fill:"#CACACA"}).click(function(e){
+       *  if(550-that.x2<10){
+       *    move(550-that.x2,550-that.x2);
+       *  }else{
+       *    if(that.x2!=550){
+       *      move(10,10)
+       *    }
+       *  }
+       *  that.miniStartIndex-=10;
+       *  that.drawMiniChartLine();
+       *});
+       */
       //底部的拖动槽
       //this.paper.path(["M",0,grooveBaseLine,"L",this.width-10,grooveBaseLine,"L",this.width-10,grooveEndLine,"L",0,grooveEndLine,"Z"]);
       //滑动块。
@@ -1037,7 +1082,7 @@ var SNB={};
               var year=new Date(data.time).getFullYear();
               if(year!=preYear&&preYear!==1999){
                 preYear=year;
-                var line=that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.volumeEndLine]).attr({stroke:"#f1f1f1"})//时间线
+                var line=that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.minibarBaseLine]).attr({stroke:"#f1f1f1"})//时间线
                 that.miniTimeLine.push(line);
                 var text=that.paper.text(xAxis+12,that.grooveBaseLine-8,year);
                 that.miniTimeText.push(text);
@@ -1049,7 +1094,8 @@ var SNB={};
             that.miniPointList.push(miniPoint);
           }
           that.beginTimespanTable.push({period:"10y",timespan:that.miniPointList[0].timespan});
-          that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#4572A7","stroke-width":"1"});
+          //that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#4572A7","stroke-width":"1"});
+          that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#f1f1f1","stroke-width":"1"});
           that.drawMinibarBase(550-minBlock-extraWidth,550);
         }
       })
