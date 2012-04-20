@@ -65,26 +65,31 @@ var SNB={};
     this.periodSeries=this.options.periodSeries;
     this.period=this.options.period;
     this.isLoading=true;
+
+    this.stateHeight=25;
+    this.currentHeight=135;
+    this.timeHeight=20;
+    this.volumeHeight=60;
+    this.volumeStateHeight=15;
+    this.volumeChartHeight=45;
+    this.stimeHeight=30;
+    this.minibarHeight=40;
+
     //各个图块的起始坐标。
-    this.stateBaseLine=0;
-    this.currentBaseLine=25;
-    this.currentEndLine=160;
-    this.volumeBaseLine=165;
-    this.timeBaseLine=210;
-    this.volumeEndLine=210;
-    this.stimeBaseLine=230;
-    this.stimeEndLine=255;//stime 选择时间模块
-    this.minibarBaseLine=260;
+    this.stateBaseLine=0+0.5;
+    this.currentBaseLine=this.stateBaseLine+this.stateHeight;
+    this.currentEndLine=this.currentBaseLine+this.currentHeight;
+    this.timeBaseLine=this.currentEndLine;
+    this.volumeBaseLine=this.timeBaseLine+this.timeHeight;
+    this.volumeChartBaseLine=this.volumeBaseLine+this.volumeStateHeight;
+    this.volumeEndLine=this.volumeBaseLine+this.volumeHeight;
+    this.stimeBaseLine=this.volumeEndLine;
+    this.stimeEndLine=this.stimeBaseLine+this.stimeHeight;//stime 选择时间模块
+    this.minibarBaseLine=this.stimeEndLine;
 
     this.grooveBaseLine=this.minibarBaseLine+26;//miniBar底部槽的初始位置。
     this.grooveEndLine=this.grooveBaseLine+14;//槽底部位置。
     //各个图块的高度
-    this.stateHeight=25;
-    this.currentHeight=135;
-    this.timeHeight=50;
-    this.volumeHeight=45;
-    this.volumeMiniInterval=0;
-    this.minibarHeight=40;
 
     this.width=567;
     this.height=360;
@@ -232,7 +237,7 @@ var SNB={};
 
 
       var currentYLableInfo=getLableY(minCurrent,maxCurrent,this.currentEndLine,this.currentHeight,"current");    
-      var volumeYLableInfo=getLableY(minVolume,maxVolume,this.volumeEndLine,this.volumeHeight,"volume");    
+      var volumeYLableInfo=getLableY(minVolume,maxVolume,this.volumeEndLine,this.volumeChartHeight,"volume");    
 
       dataSet.currentYLablesObj=currentYLableInfo.yLabelObjs;
       dataSet.volumeYLablesObj=volumeYLableInfo.yLabelObjs;
@@ -337,7 +342,7 @@ var SNB={};
           point.currentXAxis=beginx+i*xGap;
           point.volumeXAris=beginx+i*xGap;
           point.currentYAxis=that.currentEndLine+that.currentBaseLine-that.range(currentYLableInfo.dataRange,{start:this.currentBaseLine,end:this.currentBaseLine+this.currentHeight})(data.current);
-          point.volumeYAxis=that.volumeEndLine+that.volumeBaseLine-that.volumeMiniInterval-that.range(volumeYLableInfo.dataRange,{start:this.volumeBaseLine,end:this.volumeBaseLine+this.volumeHeight})(data.volume);
+          point.volumeYAxis=that.volumeEndLine+that.volumeChartBaseLine-that.range(volumeYLableInfo.dataRange,{start:this.volumeChartBaseLine,end:this.volumeChartBaseLine+this.volumeChartHeight})(data.volume);
           dataSet.pointsList.push(point);
         }else{
           dataSet.pointsList.push(null);//如果总点数超过当前数据量，后面的点为null,在图上不画出来。
@@ -539,96 +544,108 @@ var SNB={};
     },
     drawBase:function(){
       var that=this;
-      this.upRect=this.paper.path(["M",0.5,this.volumeEndLine+0.5,"L",0.5,0.5,"L",this.width+0.5,0.5,"L",this.width+0.5,this.volumeEndLine+0.5,"Z"]).attr({fill:"white","stroke-width":0});//上部外框
-      var tempdx=0;
-      this.upRect.drag(function(dx,dy,x,y,e){
-        var increase=tempdx=(dx/6)*-1;
-        console.log("origin x1:"+that.x1);
-        console.log("origin x2:"+that.x2);
-        that.x1+=increase;
-        that.x2+=increase;
-        //先不管逻辑了，想到哪写到呢，功能实现之后再看逻辑
-        //遍历minirender数据，取到时间范围，精确到某一天.
-        var renderMiniPointList=that.renderMiniPointList;
-        for(var i=0,len=renderMiniPointList.length;i<len;i++){
-          var point=renderMiniPointList[i];
-          var beginPoint,endPoint;
+      this.currentRect=this.paper.rect(0.5,0.5,this.width,this.stateHeight+this.currentHeight).attr({"stroke-width":0,"stroke":"black"});
+      this.volumeRect=this.paper.rect(0.5,this.volumeBaseLine,this.width,this.volumeHeight).attr({"stroke-width":0,"stroke":"black"});
+      bindDragEvent(this.currentRect);
+      bindDragEvent(this.volumeRect);
 
-          if(point.xAxis>=that.x1){
-            if(!beginPoint){
-              beginPoint=renderMiniPointList[i-1];
-            }
-            if(point.xAxis>=that.x2){
-              if(!endPoint){
-                endPoint=point;
-                break;
+      function bindDragEvent($el){
+        var tempdx=0;
+        $el.drag(function(dx,dy,x,y,e){
+          var increase=tempdx=(dx/6)*-1;
+          console.log("origin x1:"+that.x1);
+          console.log("origin x2:"+that.x2);
+          that.x1+=increase;
+          that.x2+=increase;
+          //先不管逻辑了，想到哪写到呢，功能实现之后再看逻辑
+          //遍历minirender数据，取到时间范围，精确到某一天.
+          var renderMiniPointList=that.renderMiniPointList;
+          for(var i=0,len=renderMiniPointList.length;i<len;i++){
+            var point=renderMiniPointList[i];
+            var beginPoint,endPoint;
+
+            if(point.xAxis>=that.x1){
+              if(!beginPoint){
+                beginPoint=renderMiniPointList[i-1];
+              }
+              if(point.xAxis>=that.x2){
+                if(!endPoint){
+                  endPoint=point;
+                  break;
+                }
               }
             }
           }
-        }
-        console.log(beginPoint.time);
-        console.log(endPoint.time);
+          console.log(beginPoint.time);
+          console.log(endPoint.time);
 
-        var miniTimespanInterval=renderMiniPointList[1].timespan-renderMiniPointList[0].timespan;
+          var miniTimespanInterval=renderMiniPointList[1].timespan-renderMiniPointList[0].timespan;
 
-        var beginTime={timespan:beginPoint.timespan,extra:(that.x1-beginPoint.xAxis)/5};
-        var endTime={timespan:endPoint.timespan,extra:(endPoint.xAxis-that.x2)/5};
-        var slice={left:beginTime.extra,right:endTime.extra};
-        
-        for(var i=0,len=that.beginTimespanTable.length;i<len;i++){
-          var data=that.beginTimespanTable[i];
-          if(beginTime.timespan>data.timespan){
-            that.period=data.period;
-            break
-          }
-        }
-        if(that.period!=="10y"){
-          beginTime.timespan=beginTime.timespan+miniTimespanInterval*beginTime.extra;
-          endTime.timespan=endTime.timespan-miniTimespanInterval*endTime.extra;
-        }
-        that.miniEndTimespan=endTime.timespan;
-
-        var renderDatas=[];
-        var currentDatas=that.originDatas[that.period];
-        for(var i=0,len=currentDatas.length;i<len;i++){
-          var d=currentDatas[i];
-          var timespan=Date.parse(d.time);
-          if(timespan>=beginTime.timespan&&timespan<=endTime.timespan){
-            renderDatas.push(d);
-            if(timespan==beginTime.timespan){
-              that.spliceNum=i;
-            }
-            if(timespan==endTime.timespan){
-              that.currentEndIndex=i;
+          var beginTime={timespan:beginPoint.timespan,extra:(that.x1-beginPoint.xAxis)/5};
+          var endTime={timespan:endPoint.timespan,extra:(endPoint.xAxis-that.x2)/5};
+          var slice={left:beginTime.extra,right:endTime.extra};
+          
+          for(var i=0,len=that.beginTimespanTable.length;i<len;i++){
+            var data=that.beginTimespanTable[i];
+            if(beginTime.timespan>data.timespan){
+              that.period=data.period;
+              break
             }
           }
-        }
-        var obj=that.wrapData(renderDatas,true,slice);
-        that.dataSet=obj;
-        that.reDraw(obj,true);
-        that.reDrawMiniLine(that.x1,that.x2);
-        console.log(renderDatas);
+          if(that.period!=="10y"){
+            beginTime.timespan=beginTime.timespan+miniTimespanInterval*beginTime.extra;
+            endTime.timespan=endTime.timespan-miniTimespanInterval*endTime.extra;
+          }
+          that.miniEndTimespan=endTime.timespan;
 
-        console.log(beginTime);
-        console.log(endTime);
+          var renderDatas=[];
+          var currentDatas=that.originDatas[that.period];
+          for(var i=0,len=currentDatas.length;i<len;i++){
+            var d=currentDatas[i];
+            var timespan=Date.parse(d.time);
+            if(timespan>=beginTime.timespan&&timespan<=endTime.timespan){
+              renderDatas.push(d);
+              if(timespan==beginTime.timespan){
+                that.spliceNum=i;
+              }
+              if(timespan==endTime.timespan){
+                that.currentEndIndex=i;
+              }
+            }
+          }
+          var obj=that.wrapData(renderDatas,true,slice);
+          that.dataSet=obj;
+          that.reDraw(obj,true);
+          that.reDrawMiniLine(that.x1,that.x2);
+          console.log(renderDatas);
 
-        that.x1-=increase;
-        that.x2-=increase;
-      },function(){
-      },function(){
-        that.x1+=tempdx;
-        that.x2+=tempdx;
-        console.log("tempdx:"+tempdx);
-        console.log(that.x1);
-        console.log(that.x2);
-      })
+          console.log(beginTime);
+          console.log(endTime);
+
+          that.x1-=increase;
+          that.x2-=increase;
+        },function(){
+        },function(){
+          that.x1+=tempdx;
+          that.x2+=tempdx;
+          console.log("tempdx:"+tempdx);
+          console.log(that.x1);
+          console.log(that.x2);
+        })
+      
+      }
+      
+      //this.upRect=this.paper.path(["M",0.5,this.volumeEndLine+0.5,"L",0.5,0.5,"L",this.width+0.5,0.5,"L",this.width+0.5,this.volumeEndLine+0.5,"Z"]).attr({fill:"white","stroke-width":0,"stroke":"black"});//上部外框
+
       //this.minibarRect=this.paper.rect(0,this.minibarBaseLine,this.width,this.minibarHeight);//minibar外框
       //this.stateRect=this.paper.rect(0,this.stateBaseLine,this.width,this.stateHeight);//状态框
-      this.paper.path(["M",0.5,this.stateHeight+0.5,"H",this.width]).attr({"stroke-width":"0.3"});
+      this.paper.path(["M",0.5,this.stateHeight,"H",this.width]).attr({"stroke-width":"0.3"});
+      this.paper.path(["M",0.5,this.volumeChartBaseLine,"H",this.width]).attr({"stroke-width":"0.3"});
+      this.paper.text(15.5,this.volumeChartBaseLine-7.5,"成交量")//成交量
       //this.currentRect=this.paper.rect(0,this.currentBaseLine,this.width,this.currentHeight);//current框
-      this.paper.path(["M",0.5,this.timeBaseLine+0.5,"H",this.width]);
+      //this.paper.path(["M",0.5,this.timeBaseLine+0.5,"H",this.width]);
       //this.timeRect=this.paper.rect(0,this.timeBaseLine,this.width,this.timeHeight);//time框
-      this.paper.path(["M",0.5,this.volumeBaseLine+0.5,"H",this.width]);
+      //this.paper.path(["M",0.5,this.volumeBaseLine+0.5,"H",this.width]);
       //this.volumeRect=this.paper.path("M",0,this.volumeBaseLine,"L",this.width,this.volumeBaseLine,"L",this.width,this.minibarBaseLine);//volume框
     },
     drawLabel:function(dataSet){
@@ -1154,7 +1171,7 @@ var SNB={};
       }else{
         offsetX=$("#"+that.container).find("div").offset().left;
       }
-      this.upRect.mousemove(function(e){
+      this.currentRect.mousemove(function(e){
         if(that.tempCircle&&!that.tempCircle.removed){
           that.tempCircle.remove();
         }
