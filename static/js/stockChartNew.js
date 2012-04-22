@@ -89,7 +89,11 @@ var SNB={};
 
     this.grooveBaseLine=this.minibarBaseLine+26;//miniBar底部槽的初始位置。
     this.grooveEndLine=this.grooveBaseLine+14;//槽底部位置。
-    //各个图块的高度
+    this.lineColors=[{color:"#0055a2",isUsed:false},{color:"#9301c3",isUsed:false},{color:"#c3aa01",isUsed:false}]
+
+    this.isCompare=false;//是否对比状态
+    this.compareStocks={};
+    this.comparingStocks=[];
 
     this.width=567;
     this.height=360;
@@ -149,34 +153,55 @@ var SNB={};
     this.originDatas={};
     var that=this;
     this.getData(function(data){
-      that.render(data);
+      that.init(data);
     })
   }
 
   SNB.stockChart.prototype={
-    getData:function(callback){
+    getData:function(callback,symbol){
       var options=this.options,
+          period=options.period,
           that=this;
 
-      if(that.originDatas[that.period]){
-        handler(that.originDatas[that.period]);
+      var stocks;
+      if(symbol){
+        stocks=that.isCompare&&that.compareStocks[symbol]&&that.compareStocks[symbol][period];
+      }else{
+        stocks=that.originDatas[period];
+      }
+
+      if(stocks){
+        handler(stocks,symbol);
       }else{
         that.isLoading=true;
-        var period=that.period=="10d"?"30d":that.period;
+        var p=period=="10d"?"30d":period,
+            s,
+            datas;
 
-        $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:period},function(ret){
+        if(symbol){
+          s=symbol;
+          datas=that.compareStocks[symbol]={};
+        }else{
+          s=options.symbol;
+          datas=that.originDatas;
+        }
+
+        $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:s,period:p},function(ret){
           if(ret.message&&ret.message.code=="0"){
             that.isLoading=false;
-            if(that.period=="10d"){
-              that.originDatas[that.period]=ret.chartlist.slice(-1*ret.chartlist.length/3);
-              that.originDatas["30d"]=_.filter(ret.chartlist,function(data){//半个小时为基准
+            if(period=="10d"){
+              datas["10d"]=ret.chartlist.slice(-1*ret.chartlist.length/3);
+              datas["30d"]=_.filter(ret.chartlist,function(data){//半个小时为基准
                 return data.time.indexOf("00:00")>-1||data.time.indexOf("30:00")>-1;
               });
-              that.beginTimespanTable.push({"period":"10d",timespan:Date.parse(that.originDatas["10d"][0].time)});
-              that.beginTimespanTable.push({period:"30d",timespan:Date.parse(that.originDatas["30d"][0].time)});
-              handler(that.originDatas["10d"]);
+              if(!symbol){
+                that.beginTimespanTable.push({"period":"10d",timespan:Date.parse(that.originDatas["10d"][0].time)});
+                that.beginTimespanTable.push({period:"30d",timespan:Date.parse(that.originDatas["30d"][0].time)});
+              }
+              handler(datas["10d"],symbol);
             }else{
-              handler(ret.chartlist);
+              datas[p]=ret.chartlist;
+              handler(ret.chartlist,symbol);
             }
 
             $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:"6m"},function(ret){
@@ -187,11 +212,9 @@ var SNB={};
             })
           }
         })
-
       }
 
-      function handler(datas){//处理接下来需要渲染的数据
-        that.originDatas[that.period]=datas;
+      function handler(datas,symbol){//处理接下来需要渲染的数据
         //that.beginTimespanTable[that.period]=Date.parse(datas[0].time);
         var renderData,
             wrapCount,
@@ -213,13 +236,17 @@ var SNB={};
           isSlice=true;
         }
 
-        var dataObj=that.wrapData(renderData,isSlice);
+        var dataObj=that.wrapData(renderData,{isSlice:isSlice,symbol:symbol});
             
         callback(dataObj);   
       }
 
     },
-    wrapData:function(dataList,isSlice,slice){
+    wrapData:function(dataList,options){
+      var isSlice=options.isSlice;
+      var slice=options.slice;
+      var symbol=options.symbol;
+      var isCompare=!!symbol;//是否对比
       var that=this;
       var datas=_.reject(dataList,function(data){//剔除错误的数据
         return data.current==0;
@@ -288,6 +315,7 @@ var SNB={};
           break;
         }
       }
+      var basePoint=datas[0];//计算百分比的基准点
       
       for(var i=0;i<pCount;i++){
         var data=datas[i],
@@ -338,6 +366,7 @@ var SNB={};
               }
             }
           }
+          point.percentage=point.current/basePoint.current-1;
           point.timespan=Date.parse(point.time);
           point.currentXAxis=beginx+i*xGap;
           point.volumeXAris=beginx+i*xGap;
@@ -418,7 +447,7 @@ var SNB={};
         return tick;
       }    
 
-      return dataSet;
+      return this.comparingStocks[symbol||options.symbol]=dataSet;
     },
     range:function(source,target,isQuote){//reflect one range of nums to others
       var sStart=source.start||0,
@@ -453,6 +482,12 @@ var SNB={};
       CorrectExponent=Math.floor(Math.log(CorrectAnswer)/Math.LN10);
       CorrectMantissa=CorrectAnswer/Math.pow(10,CorrectExponent);
       return {mantissa:CorrectMantissa,exponent:CorrectExponent};
+    },
+    init:function(dataObj){
+      var stocks=[{symbol:"BIDU",name:"百度"},{symbol:"GOOG",name:"谷歌"},{symbol:"SINA",name:"新浪"}];
+      this.compareStock(stocks);
+      $("#"+this.container).parent().css({"width":this.width+3+"px"});
+      this.render(dataObj);
     },
     render:function(dataObj){
       this.dataSet=dataObj;
@@ -1394,6 +1429,87 @@ var SNB={};
         }
         return false;
       })
+    },
+    //stocks 
+    compareStock:function(stocks){
+      var that=this;
+      var html=""
+        + '<div id="compareStock">'
+          + '<lable for="stockInput">对比</lable>'
+          + '<input id="stockInput" name="stockInput"/>';
+
+      $.each(stocks,function(k,v){
+        var id="stock_"+v.symbol;
+        html+='<input type="checkbox" data-symbol="'+v.symbol+'" id="'+id+'"/><label for="'+id+'">'+v.name+'</label>';
+      })
+
+      html+='<div id="chartOperation"><span id="chartReset">重置</span><span id="chartFullscreen" title="全屏显示">全屏</span></div></div>';
+      var container=$("#"+this.container);
+      container.before(html);
+      $("#compareStock").delegate(":checkbox","click",function(e){
+        that.isCompare=true;
+        var symbol=$(this).attr("data-symbol");
+        that.getData(function(dataObj){
+          that.drawCompareStock();
+        },symbol);
+      })
+
+      //$(html).before(container);
+    },
+    drawCompareStock:function(){
+      var allPer=[];
+      var that=this;
+      for(var symbol in this.comparingStocks){
+        var obj=this.comparingStocks[symbol],
+            per=_.pluck(obj.pointsList,"percentage");
+        allPer=allPer.concat(per);
+      }
+      
+      var maxPer=Math.max.apply(null,allPer);
+      var minPer=Math.min.apply(null,allPer);
+      for(var symbol in this.comparingStocks){
+        var pointsList=this.comparingStocks[symbol].pointsList;
+        _.map(pointsList,function(p,k){
+          p.perYAxis=that.currentEndLine+that.currentBaseLine-that.range({start:minPer,end:maxPer},{start:that.currentBaseLine,end:that.currentBaseLine+that.currentHeight})(p.percentage);
+        })
+      }
+      if(!this.currentLine.removed){
+        this.currentLine.remove();
+      }
+      this.comparingStocksLines=this.paper.set();
+      for(var symbol in this.comparingStocks){
+        var points=this.comparingStocks[symbol].pointsList;
+        var pathArray=["M"];
+        this.volumeLineSet=this.paper.set();
+        this.timeStrSet=this.paper.set();
+        this.timeLineSet=this.paper.set();
+        for(var i=0,len=points.length;i<len;i++){
+          var point=points[i];
+          if(point){
+            pathArray=pathArray.concat(point.currentXAxis,point.perYAxis);
+            if(!i){
+              pathArray.push("L");
+            }
+            if(point.timeStr){
+              var time=this.paper.text(point.volumeXAris,this.timeBaseLine+8,point.timeStr);
+              this.timeStrSet.push(time);
+              var timeLine=this.paper.path(["M",point.volumeXAris,this.timeBaseLine,"L",point.volumeXAris,this.currentBaseLine]).attr({stroke:"#e3e3e3"});
+              this.timeLineSet.push(timeLine);
+            }
+          }
+        }
+        var cl;
+        for(var i=0,len=this.lineColors.length;i<len;i++){
+          var color=this.lineColors[i];
+          if(!color.isUsed){
+            cl=color.color;
+            color.isUsed=true;
+            break;
+          }
+        }
+        console.log(cl);
+        this.comparingStocksLines.push(this.paper.path(pathArray).attr({stroke:cl,"stroke-width":"1"}));
+      }
     },
     getStockType:function(stockid){
       var specialHKStocks={

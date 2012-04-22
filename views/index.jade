@@ -3,9 +3,13 @@ html
     title index
     style
       .container{
-        margin:10 auto;
+        margin:40 auto;
         width:800px;
         height:350px;
+        border:1px solid #f1f1f1;
+      }
+      .container #stock{
+        margin-top:5px;
       }
       .selectTime{
         overflow:hidden;
@@ -36,6 +40,22 @@ html
         width:80px;
         height:20px;
       }
+      #compareStock{
+        font-size:12px;
+        overflow:hidden;
+      }
+      #compareStock #stockInput{
+        width:80px;
+      } 
+      #chartOperation{
+        float:right;
+        margin-right:3px;
+      }
+      #chartOperation span{
+        line-height:25px;
+        margin-left:5px;
+      }
+
       #cutSVG{
         margin:auto;
         border:1px solid black;
@@ -44,28 +64,26 @@ html
         cursor:pointer;
       }
   body
-    #stock.container
-    #cutSVG 截图
-    #stock1.container
-    #stock2.container
-    script(src='/socket.io/socket.io.js')
-    script(src='/static/js/lib/jquery.js')
-    script(src='/static/js/lib/jquery.mousewheel.js')
-    script(src='/static/js/lib/raphael.js')
-    script(src='/static/js/lib/underscore.js')
-    script(src='/static/js/stockChartNew.js')
-    script
+    .container
+      #stock
+      script(src='/socket.io/socket.io.js')
+      script(src='/static/js/lib/jquery.js')
+      script(src='/static/js/lib/jquery.mousewheel.js')
+      script(src='/static/js/lib/raphael.js')
+      script(src='/static/js/lib/underscore.js')
+      script(src='/static/js/stockChartNew.js')
+      script
 
-      var chart1=new SNB.stockChart({container:"stock",symbol:"GOOG"});
-      //var chart2=new SNB.stockChart({container:"stock1",symbol:"SH600768"});
-      //var chart3=new SNB.stockChart({container:"stock2",symbol:"03888"});
-      $(function(){
-        $("#select li").live("click",function(){
-          $("#select li").removeClass("selected");
-          $(this).addClass("selected");
-          $("#stock").html("");
-          var chart=new SNB.stockChart({container:"stock",period:this.id,symbol:chart1.options.symbol});
+        var chart1=new SNB.stockChart({container:"stock",symbol:"GOOG"});
+        //var chart2=new SNB.stockChart({container:"stock1",symbol:"SH600768"});
+        //var chart3=new SNB.stockChart({container:"stock2",symbol:"03888"});
+        $(function(){
+          $("#select li").live("click",function(){
+            $("#select li").removeClass("selected");
+            $(this).addClass("selected");
+            $("#stock").html("");
+            var chart=new SNB.stockChart({container:"stock",period:this.id,symbol:chart1.options.symbol});
+          })
+
         })
-
-      })
 
