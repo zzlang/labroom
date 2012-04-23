@@ -401,13 +401,19 @@ var SNB={};
           }else{
             tick=3;
           } 
-        }else{
+        }else if(dataType=="volume"){
           if(baseNum<3){
             tick=2;
           }else if(baseNum<5){
             tick=3;
           }else{
             tick=5;
+          }
+        }else if(dataType=="percentage"){
+          if(baseNum<5){
+            tick=1;
+          }else{
+            tick=2;
           }
         }
         return tick;
@@ -675,7 +681,7 @@ var SNB={};
       //this.minibarRect=this.paper.rect(0,this.minibarBaseLine,this.width,this.minibarHeight);//minibar外框
       //this.stateRect=this.paper.rect(0,this.stateBaseLine,this.width,this.stateHeight);//状态框
       this.paper.path(["M",0.5,this.stateHeight,"H",this.width]).attr({"stroke-width":"0.3"});
-      this.paper.path(["M",0.5,this.volumeChartBaseLine,"H",this.width]).attr({"stroke-width":"0.3"});
+      this.volumeSet.push(this.paper.path(["M",0.5,this.volumeChartBaseLine,"H",this.width]).attr({"stroke-width":"0.3"}));
       this.volumeSet.push(this.paper.text(15.5,this.volumeChartBaseLine-7.5,"成交量"))//成交量
       //this.currentRect=this.paper.rect(0,this.currentBaseLine,this.width,this.currentHeight);//current框
       //this.paper.path(["M",0.5,this.timeBaseLine+0.5,"H",this.width]);
@@ -1551,19 +1557,19 @@ var SNB={};
           if(that.currentHline&&!that.currentHline.removed){
             that.currentHline.remove();
           }
-          //添加对比的时候，移除变大的坐标点
-          /*
-           *if(that.tempCircleSet&&!that.tempCircleSet.removed){
-           *  that.tempCircleSet.remove();
-           *}
-           */
-          if(that.currentSplitLineSet&&!that.currentSplitLineSet.removed){
-            that.currentSplitLineSet.remove();
-          }
-          if(that.currentSplitTextSet&&!that.currentSplitTextSet.removed){
-            that.currentSplitTextSet.remove();
-          }
           that.currentRect.animate({height:that.currentHeight+that.stateHeight});
+        }
+        //添加对比的时候，移除变大的坐标点
+        /*
+         *if(that.tempCircleSet&&!that.tempCircleSet.removed){
+         *  that.tempCircleSet.remove();
+         *}
+         */
+        if(that.currentSplitLineSet&&!that.currentSplitLineSet.removed){
+          that.currentSplitLineSet.remove();
+        }
+        if(that.currentSplitTextSet&&!that.currentSplitTextSet.removed){
+          that.currentSplitTextSet.remove();
         }
         var symbol=$(this).attr("data-symbol");
         that.getData(function(dataObj){
@@ -1584,10 +1590,14 @@ var SNB={};
       
       var maxPer=Math.max.apply(null,allPer);
       var minPer=Math.min.apply(null,allPer);
+      var labelObj=that.getLableY(minPer,maxPer,this.currentEndLine,this.currentHeight,"percentage");
+      var yLabelObjs=labelObj.yLabelObjs;
+      var minYLabel=yLabelObjs[yLabelObjs.length-1];//按y坐标来分----这点太混乱了，明天一定重构。
+      var maxYLabel=yLabelObjs[0];
       for(var symbol in this.comparingStocks){
         var pointsList=this.comparingStocks[symbol].pointsList;
         _.map(pointsList,function(p,k){
-          p.perYAxis=that.currentEndLine+that.currentBaseLine-that.range({start:minPer,end:maxPer},{start:that.currentBaseLine,end:that.currentBaseLine+that.currentHeight})(p.percentage);
+          p.perYAxis=maxYLabel.yAxis+minYLabel.yAxis-that.range({start:maxYLabel.text,end:minYLabel.text},{start:minYLabel.yAxis,end:maxYLabel.yAxis})(p.percentage);
         })
       }
       if(!this.currentLine.removed){
@@ -1607,15 +1617,18 @@ var SNB={};
       if(this.timeLineSet&&!this.timeLineSet.removed){
         this.timeLineSet.remove();
       }
-      var labelObj=that.getLableY(minPer,maxPer,this.currentEndLine,this.currentHeight,"percentage");
       this.currentSplitLineSet=this.paper.set();
       this.currentSplitTextSet=this.paper.set();
 
-      for(var i=0,len=labelObj.yLabelObjs.length;i<len;i++){
+      for(var i=0,len=yLabelObjs.length;i<len;i++){
         var label=labelObj.yLabelObjs[i];
         label.text=(label.text*100).toFixed(0)+"%";
         if(i){
-          this.currentSplitLineSet.push(that.paper.path(["M",0,label.yAxis,"L",that.width,label.yAxis]).attr({stroke:"#e3e3e3"}));
+          var cr="#e3e3e3";
+          if(label.text==0){
+            cr="black"; 
+          }
+          this.currentSplitLineSet.push(that.paper.path(["M",0,label.yAxis,"L",that.width,label.yAxis]).attr({stroke:cr}));
         }
         this.currentSplitTextSet.push(that.paper.text(that.width-12,label.yAxis-7,label.text));
       }
