@@ -95,7 +95,9 @@ var SNB={};
     this.compareStocks={};
     this.comparingStocks=[];
     
-    this.volumeSet=[];//所有的volume元素集合
+    this.volumeSet=this.paper.set();//所有的volume元素集合
+
+    this.moveInfo={};//拖动或者缩放的时候保存的一些信息。
 
 
     this.width=567;
@@ -161,9 +163,11 @@ var SNB={};
   }
 
   SNB.stockChart.prototype={
-    getData:function(callback,symbol){
+    getData:function(callback,opt){
       var options=this.options,
-          period=options.period,
+          period=this.period,
+          opt=opt||{},
+          symbol=opt.symbol,
           that=this;
 
       var stocks;
@@ -174,7 +178,7 @@ var SNB={};
       }
 
       if(stocks){
-        handler(stocks,symbol);
+        handler(stocks,opt);
       }else{
         that.isLoading=true;
         var p=period=="10d"?"30d":period,
@@ -201,12 +205,12 @@ var SNB={};
                 that.beginTimespanTable.push({"period":"10d",timespan:Date.parse(that.originDatas["10d"][0].time)});
                 that.beginTimespanTable.push({period:"30d",timespan:Date.parse(that.originDatas["30d"][0].time)});
               }
-              handler(datas["10d"],symbol);
+              handler(datas["10d"],opt);
             }else{
               datas[p]=ret.chartlist;
-              handler(ret.chartlist,symbol);
+              handler(ret.chartlist,opt);
             }
-
+            // 6月的放这里来取了
             $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:"6m"},function(ret){
               if(ret.message&&ret.message.code=="0"){
                 that.originDatas["6m"]=ret.chartlist;
@@ -217,9 +221,9 @@ var SNB={};
         })
       }
 
-      function handler(datas,symbol){//处理接下来需要渲染的数据
+      function handler(datas,opt){//处理接下来需要渲染的数据
         //that.beginTimespanTable[that.period]=Date.parse(datas[0].time);
-        var renderData,
+        var renderData=[],
             wrapCount,
             isSlice=false;//是否截取
 
@@ -234,21 +238,44 @@ var SNB={};
           that.spliceNum=datas.length-renderData.length;
         }else{
           //wrapCount=options["pointsCount_5d_"+options.stockType];
-          renderData=datas.slice(options.initDays/10*(-1)*datas.length);
-          that.spliceNum=datas.length-renderData.length;
+          if(opt&&opt.extra&&opt.duration){
+            var bt=opt.duration.bt,
+                et=opt.duration.et;
+
+              console.log(bt+"-"+et);    
+            for(var i=0,len=datas.length;i<len;i++){
+              var d=datas[i],
+                  t=Date.parse(d.time);
+
+              console.log(t);
+
+
+              if(t>=bt&&t<=et){
+                renderData.push(d);
+                if(t==bt){
+                  that.spliceNum=i
+                }
+                if(t==et){
+                  that.currentEndIndex=i;
+                }
+              }
+            }
+            console.log(renderData.length);
+          }else{
+            renderData=datas.slice(options.initDays/10*(-1)*datas.length);
+            that.spliceNum=datas.length-renderData.length;
+          }
           isSlice=true;
         }
-
-        var dataObj=that.wrapData(renderData,{isSlice:isSlice,symbol:symbol});
-            
+        opt.isSlice=isSlice;
+        var dataObj=that.wrapData(renderData,opt);
         callback(dataObj);   
       }
-
     },
-    wrapData:function(dataList,options){
-      var isSlice=options.isSlice;
-      var slice=options.slice;
-      var symbol=options.symbol;
+    wrapData:function(dataList,opt){
+      var isSlice=opt.isSlice;
+      var extra=opt.extra;
+      var symbol=opt.symbol;
       var isCompare=!!symbol;//是否对比
       var that=this;
       var datas=_.reject(dataList,function(data){//剔除错误的数据
@@ -286,9 +313,9 @@ var SNB={};
       this.pCount=pCount;
       var xGap,
           beginx=0;
-      if(slice){
-        xGap=this.width/(pCount-1-slice.left-slice.right);
-        beginx=0-slice.left*xGap;
+      if(extra){
+        xGap=this.width/(pCount-1-extra.bExtra-extra.eExtra);
+        beginx=0-extra.bExtra*xGap;
       }else{
         xGap=this.width/(pCount-1);
       }
@@ -298,7 +325,7 @@ var SNB={};
       }
       that.xGap=xGap;
       that.preGapPeriod={xGap:that.xGap,period:that.period};
-      that.slice=slice;
+      that.slice=extra;
 
       var timeInterval=Date.parse(datas[datas.length-1].time)-Date.parse(datas[0].time);
       var dayTimespan=24*60*60*1000;
@@ -388,10 +415,12 @@ var SNB={};
           baseNum=Math.ceil(tempObj.mantissa),
           exponent=tempObj.exponent;
 
-      if(baseNum===10){//由于baseNum取的是cell
-        baseNum=1;
-        exponent++;
-      }    
+      /*
+       *if(baseNum===10){//由于baseNum取的是cell
+       *  baseNum=1;
+       *  exponent++;
+       *}    
+       */
       function getTick(baseNum,dataType){
         if(dataType=="current"){
           if(baseNum<4){
@@ -517,12 +546,17 @@ var SNB={};
       }
       this.currentSplitLineSet.remove();
       this.currentSplitTextSet.remove();
-      this.volumeSplitLineSet.remove();
+      this.volumeSet.exclude(this.volumeSplitLineSet);
+      this.volumeSet.exclude(this.volumeSplitTextSet);
+      this.volumeSet.exclude(this.volumeLineSet);
+      this.volumeSplitLineSet.remove()
       this.volumeSplitTextSet.remove();
       this.volumeLineSet.remove();
       this.timeStrSet.remove();
       this.timeLineSet.remove();
-      this.currentLine.remove();
+      if(this.currentLine&&!this.currentLine.removed){
+        this.currentLine.remove();
+      }
       this.drawLabel(dataObj);
       this.drawChart(dataObj);
 
@@ -594,86 +628,41 @@ var SNB={};
         var tempdx=0;
         $el.drag(function(dx,dy,x,y,e){
           var increase=tempdx=(dx/6)*-1;
-          console.log("origin x1:"+that.x1);
-          console.log("origin x2:"+that.x2);
           that.x1+=increase;
           that.x2+=increase;
           //先不管逻辑了，想到哪写到呢，功能实现之后再看逻辑
           //遍历minirender数据，取到时间范围，精确到某一天.
-          var renderMiniPointList=that.renderMiniPointList;
-          for(var i=0,len=renderMiniPointList.length;i<len;i++){
-            var point=renderMiniPointList[i];
-            var beginPoint,endPoint;
 
-            if(point.xAxis>=that.x1){
-              if(!beginPoint){
-                beginPoint=renderMiniPointList[i-1];
-              }
-              if(point.xAxis>=that.x2){
-                if(!endPoint){
-                  endPoint=point;
-                  break;
-                }
-              }
+          var opt=that.getMiniTimeInterval();
+          if(!that.isCompare){
+            that.getData(function(dataObj){
+              that.dataSet=dataObj;
+              that.reDraw(dataObj,true);
+              that.reDrawMiniLine(that.x1,that.x2);
+            },opt);
+          }else{
+            for(var symbol in that.comparingStocks){
+              opt.symbol=symbol;
+              that.getData(function(dataObj){
+                that.drawCompareStock();
+              },opt);
             }
           }
-          console.log(beginPoint.time);
-          console.log(endPoint.time);
 
-          var miniTimespanInterval=renderMiniPointList[1].timespan-renderMiniPointList[0].timespan;
 
-          var beginTime={timespan:beginPoint.timespan,extra:(that.x1-beginPoint.xAxis)/5};
-          var endTime={timespan:endPoint.timespan,extra:(endPoint.xAxis-that.x2)/5};
-          var slice={left:beginTime.extra,right:endTime.extra};
-          
-          for(var i=0,len=that.beginTimespanTable.length;i<len;i++){
-            var data=that.beginTimespanTable[i];
-            if(beginTime.timespan>data.timespan){
-              that.period=data.period;
-              break
-            }
-          }
-          if(that.period!=="10y"){
-            beginTime.timespan=beginTime.timespan+miniTimespanInterval*beginTime.extra;
-            endTime.timespan=endTime.timespan-miniTimespanInterval*endTime.extra;
-          }
-          that.miniEndTimespan=endTime.timespan;
-
-          var renderDatas=[];
-          var currentDatas=that.originDatas[that.period];
-          for(var i=0,len=currentDatas.length;i<len;i++){
-            var d=currentDatas[i];
-            var timespan=Date.parse(d.time);
-            if(timespan>=beginTime.timespan&&timespan<=endTime.timespan){
-              renderDatas.push(d);
-              if(timespan==beginTime.timespan){
-                that.spliceNum=i;
-              }
-              if(timespan==endTime.timespan){
-                that.currentEndIndex=i;
-              }
-            }
-          }
-          var obj=that.wrapData(renderDatas,true,slice);
-          that.dataSet=obj;
-          that.reDraw(obj,true);
-          that.reDrawMiniLine(that.x1,that.x2);
-          console.log(renderDatas);
-
-          console.log(beginTime);
-          console.log(endTime);
-
+          /*
+           *var obj=that.wrapData(renderDatas,true,slice);
+           *that.dataSet=obj;
+           *that.reDraw(obj,true);
+           *that.reDrawMiniLine(that.x1,that.x2);
+           */
           that.x1-=increase;
           that.x2-=increase;
         },function(){
         },function(){
           that.x1+=tempdx;
           that.x2+=tempdx;
-          console.log("tempdx:"+tempdx);
-          console.log(that.x1);
-          console.log(that.x2);
         })
-      
       }
       
       //this.upRect=this.paper.path(["M",0.5,this.volumeEndLine+0.5,"L",0.5,0.5,"L",this.width+0.5,0.5,"L",this.width+0.5,this.volumeEndLine+0.5,"Z"]).attr({fill:"white","stroke-width":0,"stroke":"black"});//上部外框
@@ -688,6 +677,43 @@ var SNB={};
       //this.timeRect=this.paper.rect(0,this.timeBaseLine,this.width,this.timeHeight);//time框
       //this.paper.path(["M",0.5,this.volumeBaseLine+0.5,"H",this.width]);
       //this.volumeRect=this.paper.path("M",0,this.volumeBaseLine,"L",this.width,this.volumeBaseLine,"L",this.width,this.minibarBaseLine);//volume框
+    },
+    getMiniTimeInterval:function(){
+      var list=this.renderMiniPointList,
+          timeInterval=list[1].timespan-list[0].timespan,
+          bp,ep;
+
+      for(var i=0,len=list.length;i<len;i++){
+        var p=list[i];//开始点结束点.
+        if(p.xAxis>=this.x1){
+          if(!bp&&i){
+            bp=list[i];
+          }
+          if(p.xAxis>=this.x2){
+            if(!ep){
+              ep=p;
+              break;
+            }
+          }
+        }
+      }
+      //初始化的时候一天对应的1px  
+      var bExtra=(this.x1-bp.xAxis)/5;
+      var eExtra=(ep.xAxis-this.x2)/5;
+
+      var bt=bp.timespan+timeInterval*bExtra;
+      var et=ep.timespan-timeInterval*eExtra;
+
+      console.log(bt+"-"+et);
+      
+      for(var i=0,len=this.beginTimespanTable.length;i<len;i++){
+        var data=this.beginTimespanTable[i];
+        if(bt>data.timespan){
+          this.period=data.period;
+          break
+        }
+      }
+      return {duration:{bt:bt,et:et},extra:{bExtra:bExtra,eExtra:eExtra}};
     },
     drawLabel:function(dataSet){
       var that=this;
@@ -1543,38 +1569,66 @@ var SNB={};
       var container=$("#"+this.container);
       container.before(html);
       $("#compareStock").delegate(":checkbox","click",function(e){
-        that.isCompare=true;
-        if(!that.currentRised){//当前价图是否增高
-          that.currentRised=true;
-          that.currentEndLine+=that.volumeHeight;
-          that.currentHeight+=that.volumeHeight;
-          that.timeBaseLine=that.currentEndLine;
-          _.each(that.volumeSet,function(set){
-            if(!set.removed){
-              set.remove();
+        var isChecked=$(this).is(":checked");
+        var symbol=$(this).attr("data-symbol");
+        if(isChecked){
+          that.isCompare=true;
+          if(!that.currentRised){//当前价图是否增高
+            that.currentRised=true;
+            that.currentEndLine+=that.volumeHeight;
+            that.currentHeight+=that.volumeHeight;
+            that.timeBaseLine=that.currentEndLine;
+            that.volumeSet.forEach(function(set){
+              if(!set.removed){
+                set.hide();
+              }
+            })
+            if(that.currentHline&&!that.currentHline.removed){
+              that.currentHline.remove();
+            }
+            that.currentRect.animate({height:that.currentHeight+that.stateHeight});
+          }
+          //添加对比的时候，移除变大的坐标点
+          /*
+           *if(that.tempCircleSet&&!that.tempCircleSet.removed){
+           *  that.tempCircleSet.remove();
+           *}
+           */
+
+          var opt=that.getMiniTimeInterval();
+          opt.symbol=symbol;
+          that.getData(function(dataObj){
+            that.drawCompareStock();
+          },opt);
+        }else{
+          delete that.comparingStocks[symbol];
+          that.comparingStocksLines.forEach(function(line){
+            if(line.data("symbol")==symbol){
+              that.comparingStocksLines.exclude(line);
+              line.remove();
             }
           })
-          if(that.currentHline&&!that.currentHline.removed){
-            that.currentHline.remove();
+          if(that.comparingStocksLines.length==1){
+            that.isCompare=false;
+            var last=that.comparingStocksLines[0];
+            last.remove();
+            that.comparingStocksLines.exclude(last);
+            that.currentRised=false;
+            that.currentEndLine-=that.volumeHeight;
+            that.currentHeight-=that.volumeHeight;
+            that.timeBaseLine=that.currentEndLine;
+            _.each(that.volumeSet,function(set){
+              if(!set.removed){
+                set.show();
+              }
+            })
+            that.currentRect.animate({height:that.currentHeight+that.stateHeight});
+            that.getData(function(dataObj){
+              that.reDraw(dataObj);
+              that.dataSet=dataObj;
+            });
           }
-          that.currentRect.animate({height:that.currentHeight+that.stateHeight});
         }
-        //添加对比的时候，移除变大的坐标点
-        /*
-         *if(that.tempCircleSet&&!that.tempCircleSet.removed){
-         *  that.tempCircleSet.remove();
-         *}
-         */
-        if(that.currentSplitLineSet&&!that.currentSplitLineSet.removed){
-          that.currentSplitLineSet.remove();
-        }
-        if(that.currentSplitTextSet&&!that.currentSplitTextSet.removed){
-          that.currentSplitTextSet.remove();
-        }
-        var symbol=$(this).attr("data-symbol");
-        that.getData(function(dataObj){
-          that.drawCompareStock();
-        },symbol);
       })
 
       //$(html).before(container);
@@ -1617,6 +1671,12 @@ var SNB={};
       if(this.timeLineSet&&!this.timeLineSet.removed){
         this.timeLineSet.remove();
       }
+      if(that.currentSplitLineSet&&!that.currentSplitLineSet.removed){
+        that.currentSplitLineSet.remove();
+      }
+      if(that.currentSplitTextSet&&!that.currentSplitTextSet.removed){
+        that.currentSplitTextSet.remove();
+      }
       this.currentSplitLineSet=this.paper.set();
       this.currentSplitTextSet=this.paper.set();
 
@@ -1639,7 +1699,6 @@ var SNB={};
       for(var symbol in this.comparingStocks){
         var points=this.comparingStocks[symbol].pointsList;
         var pathArray=["M"];
-        this.volumeLineSet=this.paper.set();
         for(var i=0,len=points.length;i<len;i++){
           var point=points[i];
           if(point){
@@ -1666,7 +1725,7 @@ var SNB={};
         }
         this.comparingStocks[symbol].color=cl;
         console.log(cl);
-        this.comparingStocksLines.push(this.paper.path(pathArray).attr({stroke:cl,"stroke-width":"1"}));
+        this.comparingStocksLines.push(this.paper.path(pathArray).attr({stroke:cl,"stroke-width":"1"}).data("symbol",symbol));
         flag++;
       }
     },
