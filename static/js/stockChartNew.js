@@ -32,7 +32,7 @@ var SNB={};
       symbol:"BIDU",
       period:"10d",//chartType
       periodIndex:1,//period indexOf periodSeries
-      initDays:3,
+      initDays:5,
       apiKey:"47bce5c74f",
       dayPointsCount_AStock:30*4,//a-stock open time: 9:30AM-11:30AM 1:00PM-3:00PM  total 4hours,delete the same point 11:30AM and 1:00PM ,then 4*30-1.
       dayPointsCount_HKStock:30*5.5,//hk-stock open time :9:30AM-12:00AM 1:00PM-4:00PM
@@ -98,6 +98,8 @@ var SNB={};
     this.volumeSet=this.paper.set();//所有的volume元素集合
 
     this.moveInfo={};//拖动或者缩放的时候保存的一些信息。
+    this.fontStyle={"fill":"#888888"};
+    this.splitLineStyle={"stroke-width":"1","stroke":"#f6f6f6"};
 
 
     this.width=567;
@@ -618,8 +620,8 @@ var SNB={};
     },
     drawBase:function(){
       var that=this;
-      this.currentRect=this.paper.rect(0.5,0.5,this.width,this.stateHeight+this.currentHeight).attr({"stroke-width":0,"stroke":"black"});
-      this.volumeRect=this.paper.rect(0.5,this.volumeBaseLine,this.width,this.volumeHeight).attr({"stroke-width":0,"stroke":"black"});
+      this.currentRect=this.paper.rect(0.5,0.5,this.width,this.stateHeight+this.currentHeight).attr({"stroke-width":0,"stroke":"#d0d0d0"});
+      this.volumeRect=this.paper.rect(0.5,this.volumeBaseLine,this.width,this.volumeHeight).attr({"stroke-width":0,"stroke":"#d0d0d0"});
       this.volumeSet.push(this.volumeRect);
       bindDragEvent(this.currentRect);
       bindDragEvent(this.volumeRect);
@@ -669,9 +671,9 @@ var SNB={};
 
       //this.minibarRect=this.paper.rect(0,this.minibarBaseLine,this.width,this.minibarHeight);//minibar外框
       //this.stateRect=this.paper.rect(0,this.stateBaseLine,this.width,this.stateHeight);//状态框
-      this.paper.path(["M",0.5,this.stateHeight,"H",this.width]).attr({"stroke-width":"0.3"});
-      this.volumeSet.push(this.paper.path(["M",0.5,this.volumeChartBaseLine,"H",this.width]).attr({"stroke-width":"0.3"}));
-      this.volumeSet.push(this.paper.text(15.5,this.volumeChartBaseLine-7.5,"成交量"))//成交量
+      this.paper.path(["M",0.5,this.stateHeight+0.5,"H",this.width]).attr(this.splitLineStyle);
+      this.volumeSet.push(this.paper.path(["M",0.5,this.volumeChartBaseLine,"H",this.width]).attr(this.splitLineStyle));
+      this.volumeSet.push(this.paper.text(15.5,this.volumeChartBaseLine-7.5,"成交量").attr(this.fontStyle))//成交量
       //this.currentRect=this.paper.rect(0,this.currentBaseLine,this.width,this.currentHeight);//current框
       //this.paper.path(["M",0.5,this.timeBaseLine+0.5,"H",this.width]);
       //this.timeRect=this.paper.rect(0,this.timeBaseLine,this.width,this.timeHeight);//time框
@@ -687,7 +689,11 @@ var SNB={};
         var p=list[i];//开始点结束点.
         if(p.xAxis>=this.x1){
           if(!bp&&i){
-            bp=list[i];
+            if(p.xAxis==this.x1){
+              bp=list[i]
+            }else{
+              bp=list[i-1];
+            }
           }
           if(p.xAxis>=this.x2){
             if(!ep){
@@ -732,9 +738,9 @@ var SNB={};
         for(var i=0,len=labels.length;i<len;i++){
           var label=labels[i];
           if(i){
-            lineSet.push(that.paper.path(["M",0,label.yAxis,"L",that.width,label.yAxis]).attr({stroke:"#e3e3e3"}));
+            lineSet.push(that.paper.path(["M",0,label.yAxis,"L",that.width,label.yAxis]).attr(that.splitLineStyle));
           }
-          textSet.push(that.paper.text(that.width-12,label.yAxis-7,label.text));
+          textSet.push(that.paper.text(that.width-12,label.yAxis-7,label.text).attr(that.fontStyle));
         }
       }
     },
@@ -752,12 +758,12 @@ var SNB={};
           if(!i){
             pathArray.push("L");
           }
-          var path=this.paper.path(["M",point.volumeXAris,point.volumeYAxis,"L",point.volumeXAris,this.volumeBaseLine+this.volumeHeight]).attr({stroke:"#4572A7","stroke-width":"1"});
+          var path=this.paper.path(["M",point.volumeXAris,point.volumeYAxis,"L",point.volumeXAris,this.volumeBaseLine+this.volumeHeight]).attr({stroke:"#c0c0c0","stroke-width":"1"});
           this.volumeLineSet.push(path);
           if(point.timeStr){
-            var time=this.paper.text(point.volumeXAris,this.timeBaseLine+8,point.timeStr);
+            var time=this.paper.text(point.volumeXAris,this.timeBaseLine+8,point.timeStr).attr(this.fontStyle);
             this.timeStrSet.push(time);
-            var timeLine=this.paper.path(["M",point.volumeXAris,this.timeBaseLine,"L",point.volumeXAris,this.currentBaseLine]).attr({stroke:"#e3e3e3"});
+            var timeLine=this.paper.path(["M",point.volumeXAris,this.timeBaseLine,"L",point.volumeXAris,this.currentBaseLine]).attr(this.splitLineStyle);
             this.timeLineSet.push(timeLine);
           }
         }
@@ -827,7 +833,7 @@ var SNB={};
       
       var dragx=0;
       var leftInterval,rightInterval;
-      this.miniLine=this.paper.path(["M",0,grooveBaseLine,"L",0,vel,"L",x1,vel,"L",x1,grooveBaseLine,"L",x2,grooveBaseLine,"L",x2,vel,"L",this.width,vel,"L",this.width,grooveBaseLine]).toFront().attr({stroke:"#f1f1f1"}).drag(
+      this.miniLine=this.paper.path(["M",0,grooveBaseLine,"L",0,vel,"L",x1,vel,"L",x1,grooveBaseLine,"L",x2,grooveBaseLine,"L",x2,vel,"L",this.width,vel,"L",this.width,grooveBaseLine]).toFront().attr({stroke:"#d0d0d0"}).drag(
         function(dx,dy,x,y,e){
           if(that.x1+dx<=10||that.x2+dx>=550){
             return false;
@@ -1033,7 +1039,7 @@ var SNB={};
         that.moveCurrent();
         return false;
       }
-      this.paper.rect(0,grooveBaseLine,this.width,14).attr({fill:"#f5f5f5","stroke-width":1,"stroke":"#ECECEC"});
+      this.paper.rect(0,grooveBaseLine,this.width,14).attr({fill:"#f3f3f3","stroke-width":1,"stroke":"#d0d0d0"});
 
       //两个移动按钮
       /*
@@ -1105,29 +1111,23 @@ var SNB={};
       var minBlock=5;
       that.miniPointList=[];
       that.renderMiniPointList=[];
-      $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:"5y"},function(ret){
+      $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:"all"},function(ret){
         if(ret.message&&ret.message.code=="0"){
           var datas=ret.chartlist;
-          that.originDatas["10y"]=datas;
-          var currentList=_.pluck(datas,"current");
-          var volumeList=_.pluck(datas,"volume");
-
-          var maxCurrent=Math.max.apply(null,currentList);//取得current 和volume的最大最小值
-          var minCurrent=Math.min.apply(null,currentList);//取得current 和volume的最大最小值
-          //需要减去两边槽的宽度
-          var beginX=10;
-          var pathArray=["M"];
+          //因为要加上当前的最后一个点
+          var renderPointNum=that.miniRenderPointNum=565/minBlock;
           var tempDatas=that.originDatas[that.period];//把当前数据的最后一个添加到mini图中去。
           var lastData=tempDatas[tempDatas.length-1];
-          var len=datas.length;
-          var lastMiniData=datas[len-1];
-          var renderPointNum=that.miniRenderPointNum=540/minBlock+1;
+          var xGap=5;//固定的了
           var startIndex=that.miniStartIndex=datas.length-renderPointNum;//mini图的起始索引。
+          var renderDatas=datas.slice((renderPointNum+1)*-1);
+          var currentList=_.pluck(renderDatas,"current");
+          var maxCurrent=Math.max.apply(null,currentList);//取得current 和volume的最大最小值
+          var minCurrent=Math.min.apply(null,currentList);//取得current 和volume的最大最小值
           var endIndex=startIndex+renderPointNum;
-          var xGap=that.miniXGap=(that.width-20)/(renderPointNum-1);
           var preYear=1900;
           var time1=lastData.time.split(" ");
-          var time2=lastMiniData.time.split(" ");
+          var time2=renderDatas[renderDatas.length-1].time.split(" ");
           var week1=time1[0];
           var week2=time2[0];
 
@@ -1137,20 +1137,26 @@ var SNB={};
 
           week1="Tue"
 
-          var weekToWidth={Mon:0,Tue:0.8,Wed:0.6,Thu:0.4,Fri:0.2};//计算额外的所占的宽度。
+          var weekToWidth={Mon:0,Tue:0.2,Wed:0.4,Thu:0.6,Fri:0.8};//计算额外的所占的宽度。
           if(date1!=date2||week1!=week2){
             extraWidth=weekToWidth[week1]*minBlock;
-            datas.push(lastData);
           }
 
+
+          //需要减去两边槽的宽度
+          var pathArray=["M"];
+          var len=renderDatas.length;
 
           that.miniTimeText=that.paper.set();
           that.miniTimeLine=that.paper.set();
 
+          var splitYearList=[];
+          var len=renderDatas.length;
+
           for(var i=0;i<len;i++){
             var miniPoint={};
-            var data=datas[i];
-            var yAxis=that.grooveBaseLine+that.minibarBaseLine-that.range({start:minCurrent,end:maxCurrent},{start:that.minibarBaseLine+3,end:that.grooveBaseLine-3})(data.current);//减3是为了避免距离变现太近。
+            var data=renderDatas[i];
+            var yAxis=that.grooveBaseLine+that.minibarBaseLine-that.range({start:minCurrent,end:maxCurrent},{start:that.minibarBaseLine+2,end:that.grooveBaseLine-2})(data.current);//减3是为了避免距离变现太近。
             miniPoint.yAxis=yAxis;
             miniPoint.time=data.time;
             miniPoint.current=data.current;
@@ -1158,32 +1164,56 @@ var SNB={};
             var timespan=Date.parse(data.time);
             //坐标和时间对应。
             miniPoint.timespan=timespan;
-            if(i>=startIndex&&i<=endIndex){
-              
-              var xAxis=beginX+(i-startIndex)*xGap;
-              miniPoint.xAxis=xAxis;
-              if(i!=startIndex){
-                pathArray.push("L");
-              }
-              pathArray=pathArray.concat(xAxis,yAxis);
-              var year=new Date(data.time).getFullYear();
-              if(year!=preYear&&preYear!==1999){
-                preYear=year;
-                var line=that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.minibarBaseLine]).attr({stroke:"#f1f1f1"})//时间线
-                that.miniTimeLine.push(line);
-                var text=that.paper.text(xAxis+12,that.grooveBaseLine-8,year);
-                that.miniTimeText.push(text);
-
-                console.log(xAxis);
-              }
-              that.renderMiniPointList.push(miniPoint);
+            if(i){
+              pathArray.push("L");
+            }
+            var xAxis=1+i*xGap-extraWidth;
+            miniPoint.xAxis=xAxis;
+            pathArray=pathArray.concat(xAxis,yAxis);
+            var year=new Date(data.time).getFullYear();
+            if(year!=preYear){
+              preYear=year;
+              splitYearList.push({text:year,x:xAxis});
             }
             that.miniPointList.push(miniPoint);
+            that.renderMiniPointList.push(miniPoint);
           }
-          that.beginTimespanTable.push({period:"10y",timespan:that.miniPointList[0].timespan});
+          if(extraWidth){
+            pathArray.push("L")
+            var miniPoint={};
+            var data=lastData;
+            var yAxis=that.grooveBaseLine+that.minibarBaseLine-that.range({start:minCurrent,end:maxCurrent},{start:that.minibarBaseLine+2,end:that.grooveBaseLine-2})(data.current);//减3是为了避免距离变现太近。
+            miniPoint.yAxis=yAxis;
+            miniPoint.time=data.time;
+            miniPoint.current=data.current;
+            miniPoint.volume=data.volume;
+            var timespan=Date.parse(data.time);
+            //坐标和时间对应。
+            miniPoint.timespan=timespan;
+            miniPoint.xAxis=that.width-1;
+            pathArray=pathArray.concat(that.width,yAxis);
+            that.renderMiniPointList.push(miniPoint);
+          }
+
+          //保证最多只有五条时间线
+          var ylen=splitYearList.length;
+          var iv=Math.ceil(ylen/5);
+          for(var i=0;i<ylen;i+=iv){
+            drawYear(splitYearList[i]);
+          }
+          
+          function drawYear(obj){
+            var year=obj.text;
+            var xAxis=obj.x;
+            var line=that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.minibarBaseLine]).attr({stroke:"#f1f1f1"})//时间线
+            that.miniTimeLine.push(line);
+            var text=that.paper.text(xAxis,that.grooveBaseLine-5,year).attr(that.fontStyle).attr({"text-anchor":"start"});
+            that.miniTimeText.push(text);
+          }
+          that.beginTimespanTable.push({period:"all",timespan:that.miniPointList[0].timespan});
           //that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#4572A7","stroke-width":"1"});
-          that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#f1f1f1","stroke-width":"1"});
-          that.drawMinibarBase(550-minBlock-extraWidth,550);
+          that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#dddddd","stroke-width":"1"});
+          that.drawMinibarBase(that.width-6,that.width-1);
         }
       })
     },
@@ -1594,6 +1624,11 @@ var SNB={};
            *  that.tempCircleSet.remove();
            *}
            */
+          var opt1=that.getMiniTimeInterval();
+          opt1.symbol=that.options.symbol;
+          that.getData(function(dataObj){
+            that.drawCompareStock();
+          },opt1)
 
           var opt=that.getMiniTimeInterval();
           opt.symbol=symbol;
@@ -1688,9 +1723,9 @@ var SNB={};
           if(label.text==0){
             cr="black"; 
           }
-          this.currentSplitLineSet.push(that.paper.path(["M",0,label.yAxis,"L",that.width,label.yAxis]).attr({stroke:cr}));
+          this.currentSplitLineSet.push(that.paper.path(["M",0,label.yAxis,"L",that.width,label.yAxis]).attr(this.splitLineStyle));
         }
-        this.currentSplitTextSet.push(that.paper.text(that.width-12,label.yAxis-7,label.text));
+        this.currentSplitTextSet.push(that.paper.text(that.width-12,label.yAxis-7,label.text).attr(this.fontStyle));
       }
 
       this.timeStrSet=this.paper.set();
@@ -1707,9 +1742,9 @@ var SNB={};
               pathArray.push("L");
             }
             if(point.timeStr&&!flag){
-              var time=this.paper.text(point.volumeXAris,this.timeBaseLine+8,point.timeStr);
+              var time=this.paper.text(point.volumeXAris,this.timeBaseLine+8,point.timeStr).attr(this.fontStyle);
               this.timeStrSet.push(time);
-              var timeLine=this.paper.path(["M",point.volumeXAris,this.timeBaseLine,"L",point.volumeXAris,this.currentBaseLine]).attr({stroke:"#e3e3e3"});
+              var timeLine=this.paper.path(["M",point.volumeXAris,this.timeBaseLine,"L",point.volumeXAris,this.currentBaseLine]).attr(this.splitLineStyle);
               this.timeLineSet.push(timeLine);
             }
           }
