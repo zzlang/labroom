@@ -39,6 +39,7 @@ html
       .selectTime #timeInterval input{
         width:80px;
         height:20px;
+        color:#888888;
       }
       #compareStock{
         font-size:12px;
@@ -63,6 +64,9 @@ html
         width:40px;
         cursor:pointer;
       }
+      .error{
+        border:1px solid red;
+      }
   body
     .container
       #stock
@@ -72,9 +76,10 @@ html
       script(src='/static/js/lib/raphael.js')
       script(src='/static/js/lib/underscore.js')
       script(src='/static/js/stockChartNew.js')
+      script(src='/static/js/My97DatePicker/WdatePicker.js')
       script
 
-        var chart1=new SNB.stockChart({container:"stock",symbol:"IBM"});
+        var chart1=new SNB.stockChart({container:"stock",symbol:"GOOG"});
         //var chart2=new SNB.stockChart({container:"stock1",symbol:"SH600768"});
         //var chart3=new SNB.stockChart({container:"stock2",symbol:"03888"});
         $(function(){
