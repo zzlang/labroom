@@ -797,7 +797,7 @@ var SNB={};
         + '<div class="selectTime">'
           + '<ul id="select">'
             + '<li id="1d">1天</li>'
-            + '<li id="5d">5天</li>'
+            + '<li id="5d" class="selected">5天</li>'
             + '<li id="1m">1月</li>'
             + '<li id="3m">3月</li>'
             + '<li id="6m">6月</li>'
@@ -825,6 +825,80 @@ var SNB={};
       }
       selectTime.appendTo($("body")).css({left:offsetX+"px",top:offsetY+that.stimeBaseLine+"px"})
       that.fillTime();
+      $("#select li").click(function(e){
+        var m=1000*60*60*24*30;
+        var t={
+          "1m":m,
+          "3m":3*m,
+          "6m":6*m,
+          "1y":12*m,
+          "3y":3*12*m,
+          "5y":5*12*m,
+          "10y":10*12*m
+        }
+        if($(this).hasClass("selected")){
+          return false;
+        }else{
+          $(this).siblings().removeClass("selected");
+          $(this).addClass("selected");
+          var id=this.id;
+          if(id=="1d"||id=="5d"||id=="all"){
+          
+          }else{
+            var miniPointList=that.renderMiniPointList;
+            var endTimespan=_.last(miniPointList).timespan;
+            var beginTimespan=endTimespan-t[id];
+            changeDate(beginTimespan,endTimespan);
+          }
+        }
+      })
+      function changeDate(beginTimespan,endTimespan){
+
+        var miniPointList=that.renderMiniPointList;
+        var miniBeginTimespan,miniEndTimespan,miniBeginXaris,miniEndXaris;
+
+        for(var i=0,len=miniPointList.length;i<len;i++){
+          var point=miniPointList[i];
+          var key=point.timespan;
+          if(key>beginTimespan){
+            if(!miniBeginTimespan){
+              miniBeginXaris=miniPointList[i-1].xAxis;
+              miniBeginTimespan=key;
+            }
+            if(key>=endTimespan){
+              if(!miniEndTimespan){
+                if(key==endTimespan){
+                  miniEndXaris=miniPointList[i].xAxis;
+                }else{
+                  miniEndXaris=miniPointList[i-1].xAxis;
+                }
+                miniEndTimespan=key;
+                break;
+              }
+            }
+          }
+        }
+        that.x1=miniBeginXaris;
+        that.x2=miniEndXaris;
+        that.reDrawMiniLine(that.x1,that.x2);
+        var opt=that.getMiniTimeInterval();
+        if(!that.isCompare){
+          that.getData(function(dataObj){
+            that.dataSet=dataObj;
+            that.reDraw(dataObj,true);
+            that.fillTime();
+          },opt);
+        }else{
+          for(var symbol in that.comparingStocks){
+            opt.symbol=symbol;
+            that.getData(function(dataObj){
+              that.drawCompareStock();
+              that.fillTime();
+            },opt);
+          }
+        }
+      
+      }
       $("#fromDate,#endDate").click(function(e){
         WdatePicker({onpicked:function(e){
           var fromDate=$("#fromDate").val();
@@ -838,45 +912,7 @@ var SNB={};
             })
             return false;
           }
-          var miniPointList=that.renderMiniPointList;
-          var miniBeginTimespan,miniEndTimespan,miniBeginXaris,miniEndXaris;
-
-          for(var i=0,len=miniPointList.length;i<len;i++){
-            var point=miniPointList[i];
-            var key=point.timespan;
-            if(key>beginTimespan){
-              if(!miniBeginTimespan){
-                miniBeginXaris=miniPointList[i-1].xAxis;
-                miniBeginTimespan=key;
-              }
-              if(key>endTimespan){
-                if(!miniEndTimespan){
-                  miniEndXaris=miniPointList[i-1].xAxis;
-                  miniEndTimespan=key;
-                  break;
-                }
-              }
-            }
-          }
-          that.x1=miniBeginXaris;
-          that.x2=miniEndXaris;
-          that.reDrawMiniLine(that.x1,that.x2);
-          var opt=that.getMiniTimeInterval();
-          if(!that.isCompare){
-            that.getData(function(dataObj){
-              that.dataSet=dataObj;
-              that.reDraw(dataObj,true);
-              that.fillTime();
-            },opt);
-          }else{
-            for(var symbol in that.comparingStocks){
-              opt.symbol=symbol;
-              that.getData(function(dataObj){
-                that.drawCompareStock();
-                that.fillTime();
-              },opt);
-            }
-          }
+          changeDate(beginTimespan,endTimespan);
         }})
       })
     },
@@ -1486,6 +1522,24 @@ var SNB={};
       html+='<div id="chartOperation"><span id="chartReset">重置</span><span id="chartFullscreen" title="全屏显示">全屏</span></div></div>';
       var container=$("#"+this.container);
       container.before(html);
+      var search=$("#stockInput");
+      $("#stockInput").autocomplete({
+        source: function(request, response) {
+          $.getJSON("http://api.xueqiu.com/stock/search.json?callback=?", {size: 10, code: request.term}, function(data) {
+            response( $.map(data.stocks, function(stock) {
+              return {
+                label: stock.name + "(" + stock.code + ")",
+                name: stock.name,
+                value: stock.code
+              }
+            }));
+          });
+        },
+        select: function(event, ui) {
+          var code=ui.item.value,
+              name=ui.item.name;
+        }
+      });
       $("#compareStock").delegate(":checkbox","click",function(e){
         var isChecked=$(this).is(":checked");
         var symbol=$(this).attr("data-symbol");

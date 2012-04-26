@@ -1,12 +1,13 @@
 html
   head
     title index
+    link(rel='stylesheet', href='/static/css/default.css') 
     style
       .container{
         margin:40 auto;
         width:800px;
         height:350px;
-        border:1px solid #f1f1f1;
+        border:1px solid #f0f0f0;
       }
       .container #stock{
         margin-top:5px;
@@ -72,23 +73,13 @@ html
       #stock
       script(src='/socket.io/socket.io.js')
       script(src='/static/js/lib/jquery.js')
+      script(src='/static/js/lib/jquery.ui.js')
       script(src='/static/js/lib/jquery.mousewheel.js')
       script(src='/static/js/lib/raphael.js')
       script(src='/static/js/lib/underscore.js')
       script(src='/static/js/stockChartNew.js')
       script(src='/static/js/My97DatePicker/WdatePicker.js')
       script
-
         var chart1=new SNB.stockChart({container:"stock",symbol:"GOOG"});
-        //var chart2=new SNB.stockChart({container:"stock1",symbol:"SH600768"});
-        //var chart3=new SNB.stockChart({container:"stock2",symbol:"03888"});
-        $(function(){
-          $("#select li").live("click",function(){
-            $("#select li").removeClass("selected");
-            $(this).addClass("selected");
-            $("#stock").html("");
-            var chart=new SNB.stockChart({container:"stock",period:this.id,symbol:chart1.options.symbol});
-          })
 
-        })
 
