@@ -102,6 +102,7 @@ var SNB={};
     this.moveInfo={};//拖动或者缩放的时候保存的一些信息。
     this.fontStyle={"fill":"#888888"};
     this.splitLineStyle={"stroke-width":"1","stroke":"#f6f6f6"};
+    this.isMiniPart=true;
 
 
     this.width=567;
@@ -196,7 +197,7 @@ var SNB={};
           s=options.symbol;
           datas=that.originDatas;
         }
-
+        that.loading&&that.loading.show();
         $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:s,period:p},function(ret){
           if(ret.message&&ret.message.code=="0"){
             that.isLoading=false;
@@ -222,6 +223,7 @@ var SNB={};
               }
             })
           }
+          that.loading&&that.loading.hide();
         })
       }
 
@@ -654,24 +656,7 @@ var SNB={};
           that.x1+=increase;
           that.x2+=increase;
 
-          var opt=that.getMiniTimeInterval();
-          if(!that.isCompare){
-            that.getData(function(dataObj){
-              that.dataSet=dataObj;
-              that.reDraw(dataObj,true);
-              that.reDrawMiniLine(that.x1,that.x2);
-              that.fillTime();
-            },opt);
-          }else{
-            for(var symbol in that.comparingStocks){
-              opt.symbol=symbol;
-              that.getData(function(dataObj){
-                that.drawCompareStock();
-                that.reDrawMiniLine(that.x1,that.x2);
-                that.fillTime();
-              },opt);
-            }
-          }
+          that.drawLinesByMini();
           that.x1-=increase;
           that.x2-=increase;
         },function(){
@@ -717,7 +702,7 @@ var SNB={};
       
       for(var i=0,len=this.beginTimespanTable.length;i<len;i++){
         var data=this.beginTimespanTable[i];
-        if(bt>data.timespan){
+        if(bt>=data.timespan){
           this.period=data.period;
           break
         }
@@ -835,20 +820,53 @@ var SNB={};
           "3y":3*12*m,
           "5y":5*12*m,
           "10y":10*12*m
-        }
+        };
+        var allPart=[
+          "3y",
+          "5y",
+          "10y",
+          "all"
+        ];
         if($(this).hasClass("selected")){
           return false;
         }else{
           $(this).siblings().removeClass("selected");
           $(this).addClass("selected");
           var id=this.id;
-          if(id=="1d"||id=="5d"||id=="all"){
-          
+          var miniPointList=that.renderMiniPointList;
+          var endTimespan=_.last(miniPointList).timespan;
+          var beginTimespan=endTimespan-t[id];
+          var allTimespan=_.find(that.beginTimespanTable,function(time){
+            return time.period=="all";
+          });
+          if(beginTimespan<allTimespan.timespan||id=="all"){
+            beginTimespan=allTimespan.timespan;
+          }
+          if(_.indexOf(allPart,id)>-1){
+            if(that.isMiniPart){
+              var option={duration:{bt:beginTimespan,et:endTimespan},type:"all"};
+              that.changeMiniLine(option);
+              that.drawLinesByMini();
+            }else{
+              changeDate(beginTimespan,endTimespan);
+            }
           }else{
-            var miniPointList=that.renderMiniPointList;
-            var endTimespan=_.last(miniPointList).timespan;
-            var beginTimespan=endTimespan-t[id];
-            changeDate(beginTimespan,endTimespan);
+            if(id=="1d"||id=="5d"){
+            
+            }else{
+              if(!that.isMiniPart){
+                if(id=="1d"){
+                  that.period="1d";
+                } else if(id=="5d"){
+                  that.period="10d";
+                }
+                var option={duration:{bt:beginTimespan,et:endTimespan},type:"part"};
+                that.changeMiniLine(option);
+                that.drawLinesByMini();
+              }else{
+                changeDate(beginTimespan,endTimespan);
+              }
+            }
           }
         }
       })
@@ -860,9 +878,13 @@ var SNB={};
         for(var i=0,len=miniPointList.length;i<len;i++){
           var point=miniPointList[i];
           var key=point.timespan;
-          if(key>beginTimespan){
+          if(key>=beginTimespan){
             if(!miniBeginTimespan){
-              miniBeginXaris=miniPointList[i-1].xAxis;
+              if(key==beginTimespan){
+                miniBeginXaris=miniPointList[i].xAxis; 
+              }else{
+                miniBeginXaris=miniPointList[i-1].xAxis;
+              }
               miniBeginTimespan=key;
             }
             if(key>=endTimespan){
@@ -881,23 +903,7 @@ var SNB={};
         that.x1=miniBeginXaris;
         that.x2=miniEndXaris;
         that.reDrawMiniLine(that.x1,that.x2);
-        var opt=that.getMiniTimeInterval();
-        if(!that.isCompare){
-          that.getData(function(dataObj){
-            that.dataSet=dataObj;
-            that.reDraw(dataObj,true);
-            that.fillTime();
-          },opt);
-        }else{
-          for(var symbol in that.comparingStocks){
-            opt.symbol=symbol;
-            that.getData(function(dataObj){
-              that.drawCompareStock();
-              that.fillTime();
-            },opt);
-          }
-        }
-      
+        that.drawLinesByMini();
       }
       $("#fromDate,#endDate").click(function(e){
         WdatePicker({onpicked:function(e){
@@ -916,7 +922,56 @@ var SNB={};
         }})
       })
     },
-    fillTime:function(){
+    //抽离出这个方法，根据移动后的mini图来画线。
+    drawLinesByMini:function(option){
+      var opt=option||this.getMiniTimeInterval(),
+          that=this;
+      
+      var timeInterval=1.5*365*24*60*60*1000;//默认一年半把，如果大于 则mini为全部  否则还是部分
+      if(opt.duration.et-opt.duration.bt>timeInterval){
+        if(that.isMiniPart){
+          opt.type="all";
+          that.changeMiniLine(opt);
+          that.isMiniPart=false;
+        }
+      }else{
+        if(!that.isMiniPart){
+          opt.type="part";
+          that.changeMiniLine(opt);
+          that.isMiniPart=true;
+        }
+      }    
+
+      if(!this.isCompare){
+        this.getData(function(dataObj){
+          that.dataSet=dataObj;
+          that.reDraw(dataObj,true);
+          that.reDrawMiniLine(that.x1,that.x2);
+          that.fillTime();
+        },opt);
+      }else{
+        var len=_.keys(this.comparingStocks).length,
+            i=0;
+        for(var symbol in this.comparingStocks){
+          //又中了闭包的枪
+          var temp=$.extend({},opt,true);
+          temp.symbol=symbol;
+          (function(o){
+            that.getData(function(dataObj){
+              ++i;
+              if(i==len){
+                that.drawCompareStock();
+                that.reDrawMiniLine(that.x1,that.x2);
+                that.fillTime();
+              }else{
+                return false;
+              }
+            },o);
+          })(temp)
+        }
+      }
+    },
+    fillTime:function(){//填充时间段
       var points,
           that=this;
       if(that.isCompare){
@@ -1015,22 +1070,7 @@ var SNB={};
             move(0,0);
           }
         }
-        var opt=that.getMiniTimeInterval();
-        if(!that.isCompare){
-          that.getData(function(dataObj){
-            that.dataSet=dataObj;
-            that.reDraw(dataObj,true);
-            that.fillTime();
-          },opt);
-        }else{
-          for(var symbol in that.comparingStocks){
-            opt.symbol=symbol;
-            that.getData(function(dataObj){
-              that.drawCompareStock();
-              that.fillTime();
-            },opt);
-          }
-        }
+        that.drawLinesByMini();
         return false;
       }
       function move(dx1,dx2,isDragBlock){
@@ -1063,8 +1103,11 @@ var SNB={};
 
       that.miniBlock=this.paper.rect(x1,grooveBaseLine,x2-x1,14).attr({r:2,"stroke-width":1,"stroke":"#B9B9B9",fill:"#CACACA"}).drag(
         function(dx,dy,x,y,e){
-          move(dx,dx,true);
-          dragx=dx;
+          if(that.x1+dx>=0&&that.x2+dx<=that.width-1){//不要超过边界。
+            move(dx,dx,true);
+            dragx=dx;
+          }  
+          return false;
         },function(){
         
         },function(){
@@ -1075,22 +1118,7 @@ var SNB={};
           }else{
             that.isInit=false;
           }
-          var opt=that.getMiniTimeInterval();
-          if(!that.isCompare){
-            that.getData(function(dataObj){
-              that.dataSet=dataObj;
-              that.reDraw(dataObj,true);
-              that.fillTime();
-            },opt);
-          }else{
-            for(var symbol in that.comparingStocks){
-              opt.symbol=symbol;
-              that.getData(function(dataObj){
-                that.drawCompareStock();
-                that.fillTime();
-              },opt);
-            }
-          }
+          that.drawLinesByMini();
         }
       );
       //还有左右两块path遮罩层。
@@ -1124,9 +1152,11 @@ var SNB={};
       var minBlock=5;
       that.miniPointList=[];
       that.renderMiniPointList=[];
+      //在这个时候就应该把线给画好了。
       $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:"all"},function(ret){
         if(ret.message&&ret.message.code=="0"){
           var datas=ret.chartlist;
+          that.originDatas["all"]=datas;
           //因为要加上当前的最后一个点
           var renderPointNum=that.miniRenderPointNum=565/minBlock;
           var tempDatas=that.originDatas[that.period];//把当前数据的最后一个添加到mini图中去。
@@ -1223,12 +1253,94 @@ var SNB={};
             var text=that.paper.text(xAxis,that.grooveBaseLine-5,year).attr(that.fontStyle).attr({"text-anchor":"start"});
             that.miniTimeText.push(text);
           }
-          that.beginTimespanTable.push({period:"all",timespan:that.miniPointList[0].timespan});
+          that.beginTimespanTable.push({period:"all",timespan:Date.parse(datas[0].time)});
           //that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#4572A7","stroke-width":"1"});
           that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#dddddd","stroke-width":"1"});
           that.drawMinibarBase(that.width-6,that.width-1);
         }
       })
+    },
+    changeMiniLine:function(obj){
+      var that=this;
+      that.miniPointList=[];
+      that.renderMiniPointList=[];
+      if(!that.miniTimeText.removed){
+        that.miniTimeText.remove();
+      }
+      that.miniTimeText=that.paper.set();
+
+      if(!that.miniTimeLine.removed){
+        that.miniTimeLine.remove();
+      }
+      that.miniTimeLine=that.paper.set();
+      if(obj.type==="all"){
+        that.isMiniPart=false;
+        var datas=this.originDatas["all"],
+            len=datas.length,
+            xGap=this.width/(len-1),
+            currentList=_.pluck(datas,"current");
+
+
+
+        var maxCurrent=Math.max.apply(null,currentList);//取得current 和volume的最大最小值
+        var minCurrent=Math.min.apply(null,currentList);//取得current 和volume的最大最小值
+        var bx,ex,splitYearList=[];
+        var pathArray=["M"];
+        var preYear=1900;
+        for(var i=0;i<len;i++){
+          var miniPoint={};
+          var data=datas[i];
+          var yAxis=that.grooveBaseLine+that.minibarBaseLine-that.range({start:minCurrent,end:maxCurrent},{start:that.minibarBaseLine+2,end:that.grooveBaseLine-2})(data.current);//减3是为了避免距离变现太近。
+          miniPoint.yAxis=yAxis;
+          miniPoint.time=data.time;
+          miniPoint.current=data.current;
+          miniPoint.volume=data.volume;
+          var timespan=Date.parse(data.time);
+          //坐标和时间对应。
+          miniPoint.timespan=timespan;
+          var xAxis=1+i*xGap;
+          miniPoint.xAxis=xAxis;
+          if(timespan>=obj.duration.bt&&!bx){
+            bx=xAxis;
+          }
+          if(timespan>=obj.duration.et&&!ex){
+            ex=xAxis;
+          }
+          if(i){
+            pathArray.push("L");
+          }
+          pathArray=pathArray.concat(xAxis,yAxis);
+          var year=new Date(data.time).getFullYear();
+          if(year!=preYear){
+            preYear=year;
+            splitYearList.push({text:year,x:xAxis});
+          }
+          that.miniPointList.push(miniPoint);
+          that.renderMiniPointList.push(miniPoint);
+        }
+        if(!ex){
+          ex=this.width-1;
+        }
+        var ylen=splitYearList.length;
+        var iv=Math.ceil(ylen/5);
+        for(var i=0;i<ylen;i+=iv){
+          drawYear(splitYearList[i]);
+        }
+        
+        function drawYear(obj){
+          var year=obj.text;
+          var xAxis=obj.x;
+          var line=that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.minibarBaseLine]).attr({stroke:"#f1f1f1"})//时间线
+          that.miniTimeLine.push(line);
+          var text=that.paper.text(xAxis,that.grooveBaseLine-5,year).attr(that.fontStyle).attr({"text-anchor":"start"});
+          that.miniTimeText.push(text);
+        }
+        that.miniChartLine.animate({path:pathArray.concat("")});
+        that.x1=bx;
+        that.x2=ex;
+        that.reDrawMiniLine(bx,ex);
+      }else{
+      }
     },
     drawMiniChartLine:function(){
       if(this.miniStartIndex==-10){//目前如果是10的话，就表示拉到头了。
@@ -1560,18 +1672,11 @@ var SNB={};
             }
             that.currentRect.animate({height:that.currentHeight+that.stateHeight});
           }
-          //添加对比的时候，移除变大的坐标点
-          /*
-           *if(that.tempCircleSet&&!that.tempCircleSet.removed){
-           *  that.tempCircleSet.remove();
-           *}
-           */
+
           var opt=that.isInit?{}:that.getMiniTimeInterval();
           opt.symbol=symbol;
-          that.loading.show();
           that.getData(function(dataObj){
             that.drawCompareStock();
-            that.loading.hide();
           },opt);
         }else{
           delete that.comparingStocks[symbol];
@@ -1600,12 +1705,10 @@ var SNB={};
             that.getData(function(dataObj){
               that.reDraw(dataObj,true);
               that.dataSet=dataObj;
-            });
+            },opt);
           }
         }
       })
-
-      //$(html).before(container);
     },
     drawCompareStock:function(){
       var allPer=[];
@@ -1658,11 +1761,11 @@ var SNB={};
         var label=labelObj.yLabelObjs[i];
         label.text=(label.text*100).toFixed(0)+"%";
         if(i){
-          var cr="#e3e3e3";
-          if(label.text==0){
-            cr="black"; 
+          var temp=that.paper.path(["M",0,label.yAxis,"L",that.width,label.yAxis]).attr(this.splitLineStyle);
+          if(label.text=="0%"){
+            temp.attr({"stroke":"black"});
           }
-          this.currentSplitLineSet.push(that.paper.path(["M",0,label.yAxis,"L",that.width,label.yAxis]).attr(this.splitLineStyle));
+          this.currentSplitLineSet.push(temp);
         }
         this.currentSplitTextSet.push(that.paper.text(that.width-12,label.yAxis-7,label.text).attr(this.fontStyle));
       }
