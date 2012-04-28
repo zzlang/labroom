@@ -201,7 +201,7 @@ var SNB={};
         $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:s,period:p},function(ret){
           if(ret.message&&ret.message.code=="0"){
             that.isLoading=false;
-            if(period=="10d"){
+            if(p=="30d"){//period=10||30  p都为30d
               datas["10d"]=ret.chartlist.slice(-1*ret.chartlist.length/3);
               datas["30d"]=_.filter(ret.chartlist,function(data){//半个小时为基准
                 return data.time.indexOf("00:00")>-1||data.time.indexOf("30:00")>-1;
@@ -210,7 +210,7 @@ var SNB={};
                 that.beginTimespanTable.push({"period":"10d",timespan:Date.parse(that.originDatas["10d"][0].time)});
                 that.beginTimespanTable.push({period:"30d",timespan:Date.parse(that.originDatas["30d"][0].time)});
               }
-              handler(datas["10d"],opt);
+              handler(datas[period],opt);
             }else{
               datas[p]=ret.chartlist;
               handler(ret.chartlist,opt);
@@ -265,8 +265,12 @@ var SNB={};
               }
             }
           }else{
-            renderData=datas.slice(options.initDays/10*(-1)*datas.length);
-            that.spliceNum=datas.length-renderData.length;
+            if(that.period=="1d"){
+              renderData=datas;
+            }else{
+              renderData=datas.slice(options.initDays/10*(-1)*datas.length);
+              that.spliceNum=datas.length-renderData.length;
+            }
           }
           isSlice=true;
         }
@@ -562,9 +566,10 @@ var SNB={};
     },
     reDraw:function(dataObj,noMini){
       var that=this;
-      if(that.tempCircle&&!that.tempCircle.removed){
-        that.tempCircle.remove();
+      if(that.tempCircleSet&&!that.tempCircleSet.removed){
+        that.tempCircleSet.remove();
       }
+      that.tempCircleSet=that.paper.set();
       if(that.stockInfo&&!that.stockInfo.removed){
         that.stockInfo.remove();
       }
@@ -821,6 +826,7 @@ var SNB={};
           "5y":5*12*m,
           "10y":10*12*m
         };
+        //全部试图下的时间段
         var allPart=[
           "3y",
           "5y",
@@ -852,14 +858,21 @@ var SNB={};
             }
           }else{
             if(id=="1d"||id=="5d"){
-            
+              var bx,ex=that.width-1;
+              if(id=="1d"){
+                that.period="1d";
+                bx=that.width-2;
+              } else if(id=="5d"){
+                that.period="10d";
+                bx=that.width-6;
+              }
+              if(!that.isMiniPart){
+                var option={duration:{bt:beginTimespan,et:endTimespan},type:"part"};
+                that.changeMiniLine(option);
+              }
+              that.drawLinesByMini({x1:bx,x2:ex});
             }else{
               if(!that.isMiniPart){
-                if(id=="1d"){
-                  that.period="1d";
-                } else if(id=="5d"){
-                  that.period="10d";
-                }
                 var option={duration:{bt:beginTimespan,et:endTimespan},type:"part"};
                 that.changeMiniLine(option);
                 that.drawLinesByMini();
@@ -928,20 +941,27 @@ var SNB={};
           that=this;
       
       var timeInterval=1.5*365*24*60*60*1000;//默认一年半把，如果大于 则mini为全部  否则还是部分
-      if(opt.duration.et-opt.duration.bt>timeInterval){
-        if(that.isMiniPart){
-          opt.type="all";
-          that.changeMiniLine(opt);
-          that.isMiniPart=false;
-        }
-      }else{
-        if(!that.isMiniPart){
-          opt.type="part";
-          that.changeMiniLine(opt);
-          that.isMiniPart=true;
-        }
-      }    
+      if(opt.duration){
+        if(opt.duration.et-opt.duration.bt>timeInterval){
+          if(that.isMiniPart){
+            opt.type="all";
+            that.changeMiniLine(opt);
+            that.isMiniPart=false;
+          }
+        }else{
+          if(!that.isMiniPart){
+            opt.type="part";
+            that.changeMiniLine(opt);
+            that.isMiniPart=true;
+          }
+        }   
+      }
 
+      if(option&&option.x1&&option.x2){//1d或者5d的时候用到   传递{x1:1,x2:2}这样的option
+        that.x1=option.x1;
+        that.x2=option.x2;
+      }
+ 
       if(!this.isCompare){
         this.getData(function(dataObj){
           that.dataSet=dataObj;
@@ -1673,7 +1693,7 @@ var SNB={};
             that.currentRect.animate({height:that.currentHeight+that.stateHeight});
           }
 
-          var opt=that.isInit?{}:that.getMiniTimeInterval();
+          var opt=(that.isInit||that.period=="1d")?{}:that.getMiniTimeInterval();
           opt.symbol=symbol;
           that.getData(function(dataObj){
             that.drawCompareStock();
@@ -1754,6 +1774,10 @@ var SNB={};
       if(that.currentSplitTextSet&&!that.currentSplitTextSet.removed){
         that.currentSplitTextSet.remove();
       }
+      if(that.tempCircleSet&&!that.tempCircleSet.removed){
+        that.tempCircleSet.remove();
+      }
+      that.tempCircleSet=that.paper.set();
       this.currentSplitLineSet=this.paper.set();
       this.currentSplitTextSet=this.paper.set();
 
