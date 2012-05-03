@@ -815,7 +815,10 @@ var SNB={};
       }
       selectTime.appendTo($("body")).css({left:offsetX+"px",top:offsetY+that.stimeBaseLine+"px"})
       that.fillTime();
+      var i=0;//for test
       $("#select li").click(function(e){
+        i++;
+        console.log(i);
         var m=1000*60*60*24*30;
         var t={
           "1m":m,
@@ -941,7 +944,7 @@ var SNB={};
           that=this;
       
       var timeInterval=1.5*365*24*60*60*1000;//默认一年半把，如果大于 则mini为全部  否则还是部分
-      if(opt.duration){
+      if(opt.duration&&opt.isDrag){
         if(opt.duration.et-opt.duration.bt>timeInterval){
           if(that.isMiniPart){
             opt.type="all";
@@ -1166,6 +1169,138 @@ var SNB={};
         endPoint=miniPointList[len-1];
       }
     },
+    drawMiniChartLine:function(){
+      var that=this,
+          datas=this.originDatas["all"],
+          isInit=true,
+          renderPointNum=datas.length,
+          miniBlock=5,
+          renderDatas,
+          extraWidth=0;
+
+      if(this.renderMiniPointList&&this.renderMiniPointList.length){
+        isInit=false;
+      }    
+      if(this.isMiniPart){
+        renderPointNum=(this.width-2)/miniBlock;
+      }
+      if(!that.miniStartIndex){
+        that.miniStartIndex=datas.length-renderPointNum;
+      }
+      if(that.miniTimeText&&!that.miniTimeText.removed){
+        that.miniTimeText.remove();
+      }
+      that.miniTimeText=that.paper.set();
+
+      if(that.miniTimeLine&&!that.miniTimeLine.removed){
+        that.miniTimeLine.remove();
+      }
+      that.miniTimeLine=that.paper.set();
+      if(that.isMiniPart){
+        renderDatas=datas.slice(that.miniStartIndex,that.miniStartIndex+renderPointNum);
+      }else{
+        renderDatas=datas;
+      }
+      if(isInit){
+        var tempDatas=that.originDatas["30d"],//把当前数据的最后一个添加到mini图中去。
+            lastData=_.last(tempDatas);
+            time1=lastData.time.split(" ");
+            time2=_.last(renderDatas).time.split(" "),
+            week1=time1[0],
+            week2=time2[0],
+            date1=time1[2],
+            date2=time2[2],
+            extraWidth=0;
+
+        var weekToWidth={Mon:0,Tue:0.2,Wed:0.4,Thu:0.6,Fri:0.8};//计算额外的所占的宽度。
+        if(date1!=date2||week1!=week2){
+          extraWidth=weekToWidth[week1]*miniBlock;
+        }
+      }
+      var currentList=_.pluck(renderDatas,"current"),
+          minCurrent=Math.min.apply(null,currentList),
+          maxCurrent=Math.max.apply(null,currentList);
+
+      var pathArray=["M"],
+          len=renderDatas.length,
+          splitYearList=[],xGap,
+          preYear=1900;
+
+      if(that.isMiniPart){
+        xGap=5;
+      }else{
+        xGap=that.width/(renderDatas.length-1);
+      }    
+
+
+
+      that.miniPointList=[];
+      that.renderMiniPointList=[];
+      for(var i=0;i<len;i++){
+        var miniPoint={};
+        var data=renderDatas[i];
+        var yAxis=that.grooveBaseLine+that.minibarBaseLine-that.range({start:minCurrent,end:maxCurrent},{start:that.minibarBaseLine+2,end:that.grooveBaseLine-2})(data.current);//减3是为了避免距离变现太近。
+        miniPoint.yAxis=yAxis;
+        miniPoint.time=data.time;
+        miniPoint.current=data.current;
+        miniPoint.volume=data.volume;
+        var timespan=Date.parse(data.time);
+        //坐标和时间对应。
+        miniPoint.timespan=timespan;
+        if(i){
+          pathArray.push("L");
+        }
+        var xAxis=1+i*xGap-extraWidth;
+        miniPoint.xAxis=xAxis;
+        pathArray=pathArray.concat(xAxis,yAxis);
+        var year=new Date(data.time).getFullYear();
+        if(year!=preYear){
+          preYear=year;
+          splitYearList.push({text:year,x:xAxis});
+        }
+        that.miniPointList.push(miniPoint);
+        that.renderMiniPointList.push(miniPoint);
+      }
+      if(extraWidth){
+        pathArray.push("L")
+        var miniPoint={};
+        var data=lastData;
+        var yAxis=that.grooveBaseLine+that.minibarBaseLine-that.range({start:minCurrent,end:maxCurrent},{start:that.minibarBaseLine+2,end:that.grooveBaseLine-2})(data.current);//减3是为了避免距离变现太近。
+        miniPoint.yAxis=yAxis;
+        miniPoint.time=data.time;
+        miniPoint.current=data.current;
+        miniPoint.volume=data.volume;
+        var timespan=Date.parse(data.time);
+        //坐标和时间对应。
+        miniPoint.timespan=timespan;
+        miniPoint.xAxis=that.width-1;
+        pathArray=pathArray.concat(that.width,yAxis);
+        that.renderMiniPointList.push(miniPoint);
+      }
+      //保证最多只有五条时间线
+      var ylen=splitYearList.length;
+      var iv=Math.ceil(ylen/5);
+      for(var i=0;i<ylen;i+=iv){
+        drawYear(splitYearList[i]);
+      }
+      
+      function drawYear(obj){
+        var year=obj.text;
+        var xAxis=obj.x;
+        var line=that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.minibarBaseLine]).attr({stroke:"#f1f1f1"})//时间线
+        that.miniTimeLine.push(line);
+        var text=that.paper.text(xAxis,that.grooveBaseLine-5,year).attr(that.fontStyle).attr({"text-anchor":"start"});
+        that.miniTimeText.push(text);
+      }
+      that.beginTimespanTable.push({period:"all",timespan:Date.parse(datas[0].time)});
+      //that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#4572A7","stroke-width":"1"});
+      if(isInit){
+        that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#dddddd","stroke-width":"1"});
+        that.drawMinibarBase(that.width-6,that.width-1);
+      }else{
+        that.miniChartLine.animate({path:pathArray.concat("")}); 
+      }
+    },
     drawMinibar:function(){
       var options=this.options;
       var that=this;
@@ -1175,236 +1310,19 @@ var SNB={};
       //在这个时候就应该把线给画好了。
       $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:options.symbol,period:"all"},function(ret){
         if(ret.message&&ret.message.code=="0"){
-          var datas=ret.chartlist;
-          that.originDatas["all"]=datas;
-          //因为要加上当前的最后一个点
-          var renderPointNum=that.miniRenderPointNum=565/minBlock;
-          var tempDatas=that.originDatas[that.period];//把当前数据的最后一个添加到mini图中去。
-          var lastData=tempDatas[tempDatas.length-1];
-          var xGap=5;//固定的了
-          var startIndex=that.miniStartIndex=datas.length-renderPointNum;//mini图的起始索引。
-          var renderDatas=datas.slice((renderPointNum+1)*-1);
-          var currentList=_.pluck(renderDatas,"current");
-          var maxCurrent=Math.max.apply(null,currentList);//取得current 和volume的最大最小值
-          var minCurrent=Math.min.apply(null,currentList);//取得current 和volume的最大最小值
-          var endIndex=startIndex+renderPointNum;
-          var preYear=1900;
-          var time1=lastData.time.split(" ");
-          var time2=renderDatas[renderDatas.length-1].time.split(" ");
-          var week1=time1[0];
-          var week2=time2[0];
-
-          var date1=time1[2];
-          var date2=time2[2];
-          var extraWidth=0;
-
-          week1="Tue"
-
-          var weekToWidth={Mon:0,Tue:0.2,Wed:0.4,Thu:0.6,Fri:0.8};//计算额外的所占的宽度。
-          if(date1!=date2||week1!=week2){
-            extraWidth=weekToWidth[week1]*minBlock;
-          }
-
-
-          //需要减去两边槽的宽度
-          var pathArray=["M"];
-          var len=renderDatas.length;
-
-          that.miniTimeText=that.paper.set();
-          that.miniTimeLine=that.paper.set();
-
-          var splitYearList=[];
-          var len=renderDatas.length;
-
-          for(var i=0;i<len;i++){
-            var miniPoint={};
-            var data=renderDatas[i];
-            var yAxis=that.grooveBaseLine+that.minibarBaseLine-that.range({start:minCurrent,end:maxCurrent},{start:that.minibarBaseLine+2,end:that.grooveBaseLine-2})(data.current);//减3是为了避免距离变现太近。
-            miniPoint.yAxis=yAxis;
-            miniPoint.time=data.time;
-            miniPoint.current=data.current;
-            miniPoint.volume=data.volume;
-            var timespan=Date.parse(data.time);
-            //坐标和时间对应。
-            miniPoint.timespan=timespan;
-            if(i){
-              pathArray.push("L");
-            }
-            var xAxis=1+i*xGap-extraWidth;
-            miniPoint.xAxis=xAxis;
-            pathArray=pathArray.concat(xAxis,yAxis);
-            var year=new Date(data.time).getFullYear();
-            if(year!=preYear){
-              preYear=year;
-              splitYearList.push({text:year,x:xAxis});
-            }
-            that.miniPointList.push(miniPoint);
-            that.renderMiniPointList.push(miniPoint);
-          }
-          if(extraWidth){
-            pathArray.push("L")
-            var miniPoint={};
-            var data=lastData;
-            var yAxis=that.grooveBaseLine+that.minibarBaseLine-that.range({start:minCurrent,end:maxCurrent},{start:that.minibarBaseLine+2,end:that.grooveBaseLine-2})(data.current);//减3是为了避免距离变现太近。
-            miniPoint.yAxis=yAxis;
-            miniPoint.time=data.time;
-            miniPoint.current=data.current;
-            miniPoint.volume=data.volume;
-            var timespan=Date.parse(data.time);
-            //坐标和时间对应。
-            miniPoint.timespan=timespan;
-            miniPoint.xAxis=that.width-1;
-            pathArray=pathArray.concat(that.width,yAxis);
-            that.renderMiniPointList.push(miniPoint);
-          }
-
-          //保证最多只有五条时间线
-          var ylen=splitYearList.length;
-          var iv=Math.ceil(ylen/5);
-          for(var i=0;i<ylen;i+=iv){
-            drawYear(splitYearList[i]);
-          }
-          
-          function drawYear(obj){
-            var year=obj.text;
-            var xAxis=obj.x;
-            var line=that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.minibarBaseLine]).attr({stroke:"#f1f1f1"})//时间线
-            that.miniTimeLine.push(line);
-            var text=that.paper.text(xAxis,that.grooveBaseLine-5,year).attr(that.fontStyle).attr({"text-anchor":"start"});
-            that.miniTimeText.push(text);
-          }
-          that.beginTimespanTable.push({period:"all",timespan:Date.parse(datas[0].time)});
-          //that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#4572A7","stroke-width":"1"});
-          that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#dddddd","stroke-width":"1"});
-          that.drawMinibarBase(that.width-6,that.width-1);
+          that.originDatas["all"]=ret.chartlist;
+          that.drawMiniChartLine();
         }
       })
     },
     changeMiniLine:function(obj){
       var that=this;
-      that.miniPointList=[];
-      that.renderMiniPointList=[];
-      if(!that.miniTimeText.removed){
-        that.miniTimeText.remove();
-      }
-      that.miniTimeText=that.paper.set();
-
-      if(!that.miniTimeLine.removed){
-        that.miniTimeLine.remove();
-      }
-      that.miniTimeLine=that.paper.set();
       if(obj.type==="all"){
         that.isMiniPart=false;
-        var datas=this.originDatas["all"],
-            len=datas.length,
-            xGap=this.width/(len-1),
-            currentList=_.pluck(datas,"current");
-
-
-
-        var maxCurrent=Math.max.apply(null,currentList);//取得current 和volume的最大最小值
-        var minCurrent=Math.min.apply(null,currentList);//取得current 和volume的最大最小值
-        var bx,ex,splitYearList=[];
-        var pathArray=["M"];
-        var preYear=1900;
-        for(var i=0;i<len;i++){
-          var miniPoint={};
-          var data=datas[i];
-          var yAxis=that.grooveBaseLine+that.minibarBaseLine-that.range({start:minCurrent,end:maxCurrent},{start:that.minibarBaseLine+2,end:that.grooveBaseLine-2})(data.current);//减3是为了避免距离变现太近。
-          miniPoint.yAxis=yAxis;
-          miniPoint.time=data.time;
-          miniPoint.current=data.current;
-          miniPoint.volume=data.volume;
-          var timespan=Date.parse(data.time);
-          //坐标和时间对应。
-          miniPoint.timespan=timespan;
-          var xAxis=1+i*xGap;
-          miniPoint.xAxis=xAxis;
-          if(timespan>=obj.duration.bt&&!bx){
-            bx=xAxis;
-          }
-          if(timespan>=obj.duration.et&&!ex){
-            ex=xAxis;
-          }
-          if(i){
-            pathArray.push("L");
-          }
-          pathArray=pathArray.concat(xAxis,yAxis);
-          var year=new Date(data.time).getFullYear();
-          if(year!=preYear){
-            preYear=year;
-            splitYearList.push({text:year,x:xAxis});
-          }
-          that.miniPointList.push(miniPoint);
-          that.renderMiniPointList.push(miniPoint);
-        }
-        if(!ex){
-          ex=this.width-1;
-        }
-        var ylen=splitYearList.length;
-        var iv=Math.ceil(ylen/5);
-        for(var i=0;i<ylen;i+=iv){
-          drawYear(splitYearList[i]);
-        }
-        
-        function drawYear(obj){
-          var year=obj.text;
-          var xAxis=obj.x;
-          var line=that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.minibarBaseLine]).attr({stroke:"#f1f1f1"})//时间线
-          that.miniTimeLine.push(line);
-          var text=that.paper.text(xAxis,that.grooveBaseLine-5,year).attr(that.fontStyle).attr({"text-anchor":"start"});
-          that.miniTimeText.push(text);
-        }
-        that.miniChartLine.animate({path:pathArray.concat("")});
-        that.x1=bx;
-        that.x2=ex;
-        that.reDrawMiniLine(bx,ex);
       }else{
+        that.isMiniPart=true;
       }
-    },
-    drawMiniChartLine:function(){
-      if(this.miniStartIndex==-10){//目前如果是10的话，就表示拉到头了。
-        this.miniStartIndex=0;
-        return false;
-      }
-      if(this.miniStartIndex<0){
-        this.miniStartIndex=0;
-      }
-      if(this.miniStartIndex+this.miniRenderPointNum>this.miniPointList.length){
-        this.miniStartIndex=this.miniPointList.length-this.miniRenderPointNum;
-      }
-      var preYear=1999;
-      var pathArray=["M"];
-      var beginX=10;
-      var that=this;
-      var startIndex=this.miniStartIndex;
-      var endIndex=startIndex+this.miniRenderPointNum;
-      that.miniTimeText.remove();
-      that.miniTimeLine.remove();
-      that.miniTimeText=that.paper.set();
-      that.miniTimeLine=that.paper.set();
-      that.renderMiniPointList=[];
-      for(var i=0,len=this.miniPointList.length;i<len;i++){
-        var point=this.miniPointList[i];
-        if(i>=startIndex&&i<endIndex){
-          var xAxis=beginX+(i-startIndex)*this.miniXGap;
-          this.miniPointList[i].xAxis=xAxis;
-          if(i!=startIndex){
-            pathArray.push("L");
-          }
-          pathArray=pathArray.concat(xAxis,point.yAxis);
-          var year=new Date(point.time).getFullYear();
-          if(year!=preYear&&preYear!==1999){
-            preYear=year;
-            var line=that.paper.path(["M",xAxis,that.grooveBaseLine,"L",xAxis,that.volumeEndLine]).attr({stroke:"#f1f1f1"})//时间线
-            var text=that.paper.text(xAxis+12,that.grooveBaseLine-8,year);
-            that.miniTimeText.push(text);
-            that.miniTimeLine.push(line);
-          }
-          that.renderMiniPointList.push(point);
-        }
-      }
-      that.miniChartLine.animate({path:pathArray.concat(" ")},1);
+      that.drawMiniChartLine();
     },
     bindMoveEvent:function(){
       var that=this;
@@ -1437,8 +1355,6 @@ var SNB={};
         }else{
           points=that.dataSet.pointsList
         }
-
-
 
         var gap=(points[1].currentXAxis-points[0].currentXAxis)/2;
         for(var i=0,len=points.length;i<len;i++){
@@ -1633,7 +1549,6 @@ var SNB={};
               }
             }
           }
-        
         }
         return false;
       })
