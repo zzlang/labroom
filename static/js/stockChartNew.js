@@ -104,6 +104,8 @@ var SNB={};
     this.splitLineStyle={"stroke-width":"1","stroke":"#f6f6f6"};
     this.isMiniPart=true;
 
+    this.cacheMiniPointsList={};//把一些点给缓存起来--也就是part和all
+
 
     this.width=567;
     this.height=360;
@@ -206,6 +208,9 @@ var SNB={};
               datas["30d"]=_.filter(ret.chartlist,function(data){//半个小时为基准
                 return data.time.indexOf("00:00")>-1||data.time.indexOf("30:00")>-1;
               });
+              if(!that.lastPointTimespan){
+                that.lastPointTimespan=Date.parse(_.last(datas["30d"]).time);
+              }
               if(!symbol){
                 that.beginTimespanTable.push({"period":"10d",timespan:Date.parse(that.originDatas["10d"][0].time)});
                 that.beginTimespanTable.push({period:"30d",timespan:Date.parse(that.originDatas["30d"][0].time)});
@@ -756,7 +761,7 @@ var SNB={};
           if(point.timeStr){
             var time=this.paper.text(point.volumeXAris,this.timeBaseLine+8,point.timeStr).attr(this.fontStyle);
             this.timeStrSet.push(time);
-            var timeLine=this.paper.path(["M",point.volumeXAris,this.timeBaseLine,"L",point.volumeXAris,this.currentBaseLine]).attr(this.splitLineStyle);
+            var timeLine=this.paper.path(["M",point.volumeXAris,this.timeBaseLine+0.5,"L",point.volumeXAris,this.currentBaseLine]).attr(this.splitLineStyle);
             this.timeLineSet.push(timeLine);
           }
         }
@@ -815,35 +820,35 @@ var SNB={};
       }
       selectTime.appendTo($("body")).css({left:offsetX+"px",top:offsetY+that.stimeBaseLine+"px"})
       that.fillTime();
-      var i=0;//for test
+
+      var m=1000*60*60*24*30;
+      var t={
+        "1m":m,
+        "3m":3*m,
+        "6m":6*m,
+        "1y":12*m,
+        "3y":3*12*m,
+        "5y":5*12*m,
+        "10y":10*12*m
+      };
+      //全部试图下的时间段
+      var allPart=[
+        "3y",
+        "5y",
+        "10y",
+        "all"
+      ];
       $("#select li").click(function(e){
-        i++;
-        console.log(i);
-        var m=1000*60*60*24*30;
-        var t={
-          "1m":m,
-          "3m":3*m,
-          "6m":6*m,
-          "1y":12*m,
-          "3y":3*12*m,
-          "5y":5*12*m,
-          "10y":10*12*m
-        };
-        //全部试图下的时间段
-        var allPart=[
-          "3y",
-          "5y",
-          "10y",
-          "all"
-        ];
+        var temp=that.miniStartIndex;
+        that.miniStartIndex=that.originMiniStartIndex;
+
         if($(this).hasClass("selected")){
           return false;
         }else{
           $(this).siblings().removeClass("selected");
           $(this).addClass("selected");
           var id=this.id;
-          var miniPointList=that.renderMiniPointList;
-          var endTimespan=_.last(miniPointList).timespan;
+          var endTimespan=that.lastPointTimespan;
           var beginTimespan=endTimespan-t[id];
           var allTimespan=_.find(that.beginTimespanTable,function(time){
             return time.period=="all";
@@ -857,7 +862,7 @@ var SNB={};
               that.changeMiniLine(option);
               that.drawLinesByMini();
             }else{
-              changeDate(beginTimespan,endTimespan);
+              changeDate(beginTimespan,endTimespan,id);
             }
           }else{
             if(id=="1d"||id=="5d"){
@@ -880,13 +885,19 @@ var SNB={};
                 that.changeMiniLine(option);
                 that.drawLinesByMini();
               }else{
-                changeDate(beginTimespan,endTimespan);
+                if(temp<that.originMiniStartIndex){//在mini图移动的情况下进行还原好  
+                  var option={duration:{bt:beginTimespan,et:endTimespan},type:"part"};
+                  that.changeMiniLine(option);
+                  that.drawLinesByMini();
+                }else{
+                  changeDate(beginTimespan,endTimespan,id);
+                }
               }
             }
           }
         }
       })
-      function changeDate(beginTimespan,endTimespan){
+      function changeDate(beginTimespan,endTimespan,id){
 
         var miniPointList=that.renderMiniPointList;
         var miniBeginTimespan,miniEndTimespan,miniBeginXaris,miniEndXaris;
@@ -915,6 +926,9 @@ var SNB={};
               }
             }
           }
+        }
+        if(!miniEndXaris){
+          miniEndXaris=that.width-1;
         }
         that.x1=miniBeginXaris;
         that.x2=miniEndXaris;
@@ -1099,7 +1113,10 @@ var SNB={};
       function move(dx1,dx2,isDragBlock){
         that.miniLine.animate({path:["M",0,vel,"L",that.x1+dx1,vel,"L",that.x1+dx1,grooveBaseLine,"L",that.x2+dx2,grooveBaseLine,"L",that.x2+dx2,vel,"L",that.width,vel].concat("")},1);
         //that.miniBlock.animate({path:["M",that.x1+dx1,grooveBaseLine,"L",that.x2+dx2,that.grooveBaseLine,"L",that.x2+dx2,grooveEndLine,"L",that.x1+dx1,grooveEndLine,"Z"].concat("")},1);
-        that.miniBlock.animate({x:that.x1+dx1,y:grooveBaseLine,width:that.x2+dx2-that.x1-dx1},1);
+        var width=that.x2+dx2-that.x1-dx1;
+        if(width>=0){
+          that.miniBlock.animate({x:that.x1+dx1,y:grooveBaseLine,width:width},1);
+        }
         if(dx1&&dx2){//同时存在说明是点击下边槽的移动
           leftCircle.animate({x:that.x1+dx1-4},1);
           rightCircle.animate({x:that.x2+dx1-4},1);
@@ -1123,17 +1140,51 @@ var SNB={};
         return false;
       }
       this.paper.rect(0,grooveBaseLine,this.width,14).attr({fill:"#f3f3f3","stroke-width":1,"stroke":"#d0d0d0"});
-
+      
+      var moveInterval;
       that.miniBlock=this.paper.rect(x1,grooveBaseLine,x2-x1,14).attr({r:2,"stroke-width":1,"stroke":"#B9B9B9",fill:"#CACACA"}).drag(
         function(dx,dy,x,y,e){
           if(that.x1+dx>=0&&that.x2+dx<=that.width-1){//不要超过边界。
             move(dx,dx,true);
             dragx=dx;
+            var tx1=that.x1+dx,
+                tx2=that.x2+dx;
+            
+            if(tx1<50||tx2>(that.width-50)){
+              var direction=tx1<50?"left":"right";
+              if(!moveInterval&&that.miniStartIndex>=0&&that.miniStartIndex<=that.originMiniStartIndex){
+                moveInterval=setInterval(function(){
+                  if(direction=="left"){
+                    that.miniStartIndex-=10;
+                  }else{
+                    that.miniStartIndex+=10;
+                  }
+                  if(that.miniStartIndex<0){
+                    that.miniStartIndex=0;
+                    window.clearInterval(moveInterval);
+                  }
+                  if(that.miniStartIndex>that.originMiniStartIndex){
+                    that.miniStartIndex=that.originMiniStartIndex;
+                    window.clearInterval(moveInterval);
+                  }
+                  that.drawMiniChartLine();
+                },100);
+              }
+            }else{
+              if(moveInterval){
+                window.clearInterval(moveInterval);
+                moveInterval=undefined;
+              }
+            }
           }  
           return false;
         },function(){
         
         },function(){
+          if(moveInterval){
+            window.clearInterval(moveInterval);
+            moveInterval=undefined;
+          }
           that.x1+=dragx;
           that.x2+=dragx;
           if(that.x2==that.width-1&&that.x2==that.x1+5){
@@ -1169,14 +1220,15 @@ var SNB={};
         endPoint=miniPointList[len-1];
       }
     },
-    drawMiniChartLine:function(){
+    drawMiniChartLine:function(duration){
       var that=this,
           datas=this.originDatas["all"],
-          isInit=true,
+          isInit=true,//第一次绘图
           renderPointNum=datas.length,
           miniBlock=5,
           renderDatas,
-          extraWidth=0;
+          extraWidth=0,
+          isBackInit=false;//mini图回归初始位置
 
       if(this.renderMiniPointList&&this.renderMiniPointList.length){
         isInit=false;
@@ -1184,8 +1236,8 @@ var SNB={};
       if(this.isMiniPart){
         renderPointNum=(this.width-2)/miniBlock;
       }
-      if(!that.miniStartIndex){
-        that.miniStartIndex=datas.length-renderPointNum;
+      if(typeof that.miniStartIndex=="undefined"){//因为miniStartIndex可能为0
+        that.originMiniStartIndex=that.miniStartIndex=datas.length-renderPointNum;
       }
       if(that.miniTimeText&&!that.miniTimeText.removed){
         that.miniTimeText.remove();
@@ -1201,7 +1253,11 @@ var SNB={};
       }else{
         renderDatas=datas;
       }
-      if(isInit){
+      if(that.isMiniPart&&_.last(datas).time==_.last(renderDatas).time){//如果isMiniPart=true  并且渲染的点与总数据的最后一个点一样的话  说明也是初始状态下。
+        isBackInit=true;
+      }
+
+      if(isInit||isBackInit){
         var tempDatas=that.originDatas["30d"],//把当前数据的最后一个添加到mini图中去。
             lastData=_.last(tempDatas);
             time1=lastData.time.split(" ");
@@ -1229,8 +1285,9 @@ var SNB={};
       if(that.isMiniPart){
         xGap=5;
       }else{
-        xGap=that.width/(renderDatas.length-1);
+        xGap=(that.width-2)/(renderDatas.length-1);
       }    
+      var ex=0,bx=0;
 
 
 
@@ -1252,6 +1309,14 @@ var SNB={};
         }
         var xAxis=1+i*xGap-extraWidth;
         miniPoint.xAxis=xAxis;
+        if(duration){
+          if(!bx&&timespan>=duration.bt){
+            bx=xAxis;
+          }
+          if(timespan>=duration.et&&!ex){
+            ex=xAxis;
+          }
+        }
         pathArray=pathArray.concat(xAxis,yAxis);
         var year=new Date(data.time).getFullYear();
         if(year!=preYear){
@@ -1277,6 +1342,17 @@ var SNB={};
         pathArray=pathArray.concat(that.width,yAxis);
         that.renderMiniPointList.push(miniPoint);
       }
+
+      if(duration){
+        if(!ex){
+          ex=this.width-1;
+        }
+        if(ex&&bx){
+          that.x1=bx;
+          that.x2=ex;
+        }
+        that.reDrawMiniLine(bx,ex);
+      }
       //保证最多只有五条时间线
       var ylen=splitYearList.length;
       var iv=Math.ceil(ylen/5);
@@ -1297,8 +1373,21 @@ var SNB={};
       if(isInit){
         that.miniChartLine=that.paper.path(pathArray).attr({stroke:"#dddddd","stroke-width":"1"});
         that.drawMinibarBase(that.width-6,that.width-1);
+        cache("part");
       }else{
         that.miniChartLine.animate({path:pathArray.concat("")}); 
+        if(!that.isMiniPart){
+          cache("all");
+        }
+      }
+      //缓存一些数据
+      function cache(type){
+        if(!that.cacheMiniPointsList[type]){
+          that.cacheMiniPointsList[type]={
+            points:that.renderMiniPointList.slice(0),
+            splitYearList:splitYearList.slice(0)
+          };
+        }
       }
     },
     drawMinibar:function(){
@@ -1322,7 +1411,7 @@ var SNB={};
       }else{
         that.isMiniPart=true;
       }
-      that.drawMiniChartLine();
+      that.drawMiniChartLine(obj.duration);
     },
     bindMoveEvent:function(){
       var that=this;
@@ -1559,12 +1648,16 @@ var SNB={};
       var html=""
         + '<div id="compareStock">'
           + '<lable for="stockInput">对比</lable>'
-          + '<input id="stockInput" name="stockInput"/>';
+          + '<input id="stockInput" name="stockInput"/>'
+          + '<div class="compareList">';
+
 
       $.each(stocks,function(k,v){
         var id="stock_"+v.symbol;
-        html+='<input type="checkbox" data-symbol="'+v.symbol+'" id="'+id+'"/><label for="'+id+'">'+v.name+'</label>';
+        html+='<label for="'+id+'"><input type="checkbox" data-symbol="'+v.symbol+'" id="'+id+'"/><span>'+v.name+'</span></label>';
       })
+
+      html+='</div>';
 
       html+='<div id="chartOperation"><span id="chartReset">重置</span><span id="chartFullscreen" title="全屏显示">全屏</span></div></div>';
       var container=$("#"+this.container);
