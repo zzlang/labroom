@@ -36,7 +36,7 @@ var SNB={};
       apiKey:"47bce5c74f",
       dayPointsCount_AStock:30*4,//a-stock open time: 9:30AM-11:30AM 1:00PM-3:00PM  total 4hours,delete the same point 11:30AM and 1:00PM ,then 4*30-1.
       dayPointsCount_HKStock:30*5.5,//hk-stock open time :9:30AM-12:00AM 1:00PM-4:00PM
-      dayPointsCount_$Stock:30*6.5,//$-stock open time: 9:30AM-4:00PM
+      dayPointsCount_$Stock:30*6.5+1,//$-stock open time: 9:30AM-4:00PM
       pointsCount_5d_AStock:125,
       pointsCount_5d_HKStock:175,
       pointsCount_5d_$Stock:200,
@@ -60,7 +60,7 @@ var SNB={};
     // if(window.location.hash){
     //   this.options.symbol=window.location.hash.substr(1);
     // }
-    this.options.stockType=this.getStockType(this.options.symbol).stockType;
+    this.stockType=this.options.stockType=this.getStockType(this.options.symbol).stockType;
     this.periodIndex=this.options.periodIndex;
     this.periodSeries=this.options.periodSeries;
     this.period=this.options.period;
@@ -152,13 +152,11 @@ var SNB={};
         ratioNext:1/20,
         ratioPre:6/1
       },
-      "10y":{
+      "all":{
         pre:"6m",
         next:"",
         toNext:"",
-        toPre:23,
-        ratioNext:"",
-        ratioPre:20/1
+        ratioNext:""
       }
     };
     this.beginTimespanTable=[];
@@ -203,6 +201,7 @@ var SNB={};
         $.getJSON(options.dataUrl+"?callback=?",{key:options.apiKey,symbol:s,period:p},function(ret){
           if(ret.message&&ret.message.code=="0"){
             that.isLoading=false;
+            ret.chartlist=fixDatas(ret.chartlist,p);
             if(p=="30d"){//period=10||30  p都为30d
               datas["10d"]=ret.chartlist.slice(-1*ret.chartlist.length/3);
               datas["30d"]=_.filter(ret.chartlist,function(data){//半个小时为基准
@@ -230,6 +229,96 @@ var SNB={};
           }
           that.loading&&that.loading.hide();
         })
+      }
+      function fTime(time){
+        var timeArray=time.split(" "),
+            timeStr=timeArray.slice(0,3).join(" ");
+
+        return timeStr;    
+      }
+      function addMinutes(time,type){
+        var hms=time.split(":"),
+            h=parseInt(hms[0]),
+            m=parseInt(hms[1]);
+
+        if(type=="AStock"){//a股和港股中午休市一段时间
+          if(time=="11:30:00"){
+            return "13:00:00";
+          }
+        }else if(type=="HKStock"){
+          if(time=="12:00:00"){
+            return "13:00:00";
+          }
+        }
+
+        m+=2;
+
+        if(m>60){
+          m-=60;
+          h+=1;
+          if(h>23){
+            h-=24;
+          }
+        }
+        if(m<10){
+          m="0"+m;
+        }
+
+        if(h<10){
+          h="0"+h;
+        }
+        return [h,m,s].join(":");
+      }
+
+      function fixDatas(ds,p){
+        if(p=="1d"){
+          var count=that.options["dayPointsCount_"+that.stockType];
+          if(ds.length<count){
+            var last=_.last(ds),
+                current=last.current,
+                volume=last.volume,
+                i=ds.length;
+
+            for(;i<count;i++){
+              var preData=ds[i-1];
+              var timeStr=preData.time;
+              var preHMS=timeStr.split(" ")[3];
+              var time=addMinutes(preHMS,that.options.stockType);
+              time=timeStr.replace(preHMS,time);
+              ds.push({"isNull":true,time:time,current:current,volume:volume});
+            }
+          }
+        }else if(p=="30d"){
+          var firstTime=fTime(ds[0].time);
+          var lastTime=fTime(_.last(ds).time);
+
+          console.log(ds[0]);
+          var current=ds[0].current;
+          var volume=ds[0].volume;
+          
+          var fArray=_.filter(ds,function(data){
+            return data.time.indexOf(firstTime)>-1;
+          })
+          var lArray=_.filter(ds,function(data){
+            return data.time.indexOf(lastTime)>-1;
+          })
+          if(fArray.length==lArray.length){
+            return ds;
+          }else{
+            var i=0,
+                len=fArray.length,
+                oriLen=lArray.length;
+
+            for(;i<len;i++){
+              if(!lArray[i]){
+                var time=fArray[i].time.replace(firstTime,lastTime);
+                lArray.push({"isNull":true,time:time,current:current,volume:volume});
+              }
+            }
+            ds=ds.slice(0,ds.length-oriLen).concat(lArray);
+          }
+        }
+        return ds;
       }
 
       function handler(datas,opt){//处理接下来需要渲染的数据
@@ -394,42 +483,36 @@ var SNB={};
         }
         if(data){
           var stockType=options.stockType;
-          if(stockType!=="$Stock"&&options.period==="1d"){
-            var deleteTime=stockType==="AStock"?"11:30:00":"12:00:00",
-                newDataList=[];
-            
-            if(data.time.indexOf(deleteTime)>-1){
-              continue;
-            }
-          }else{
-            var time=data.time,//[Fri Apr 06 13:00:00 -0400 2012]
-                tempArray=time.split(" "),
-                preTempArray=preData.time.split(" ");
 
-            if(that.period==="1d"){
-              if(tempArray[3].indexOf("00:00")>0){
+          var time=data.time,//[Fri Apr 06 13:00:00 -0400 2012]
+              tempArray=time.split(" "),
+              preTempArray=preData.time.split(" ");
+
+          if(that.period==="1d"){
+            if(tempArray[3].indexOf("00:00")>0){
+              if(!(stockType=="HKStock"&&tempArray[3].indexOf("12:00:00")>-1)){
                 point.timeStr=tempArray[3].replace(/:00$/g,function(all){
                   return "";
                 });
               }
-            }else{
-              var timeStr=tempArray[1]+" "+tempArray[2];
-              if(span==0){
-                if(preTempArray[2]!=tempArray[2]){
-                  point.timeStr=timeStr;
-                }
-              }else if(span==1){
-                if((tempArray[0]=="Mon"&&preTempArray[2]!=tempArray[2])||(tempArray[0]=="Tue"&&preTempArray[0]!="Mon"&&preTempArray[2]!=tempArray[2])){
-                  point.timeStr=timeStr;
-                }
-              }else if(span==2){
-                if(preTempArray[1]!=tempArray[1]){
-                  point.timeStr=timeStr
-                }
-              }else if(span==3){
-                if(preTempArray[5]!=tempArray[5]){
-                  point.timeStr=timeStr;
-                }
+            }
+          }else{
+            var timeStr=tempArray[1]+" "+tempArray[2];
+            if(span==0){
+              if(preTempArray[2]!=tempArray[2]){
+                point.timeStr=timeStr;
+              }
+            }else if(span==1){
+              if((tempArray[0]=="Mon"&&preTempArray[2]!=tempArray[2])||(tempArray[0]=="Tue"&&preTempArray[0]!="Mon"&&preTempArray[2]!=tempArray[2])){
+                point.timeStr=timeStr;
+              }
+            }else if(span==2){
+              if(preTempArray[1]!=tempArray[1]){
+                point.timeStr=timeStr
+              }
+            }else if(span==3){
+              if(preTempArray[5]!=tempArray[5]){
+                point.timeStr=timeStr;
               }
             }
           }
@@ -442,7 +525,7 @@ var SNB={};
           point.volumeYAxis=that.volumeEndLine+that.volumeChartBaseLine-that.range(volumeYLableInfo.dataRange,{start:this.volumeChartBaseLine,end:this.volumeChartBaseLine+this.volumeChartHeight})(data.volume);
           dataSet.pointsList.push(point);
         }else{
-          dataSet.pointsList.push(null);//如果总点数超过当前数据量，后面的点为null,在图上不画出来。
+          dataSet.pointsList.push(data);//如果总点数超过当前数据量，后面的点为null,在图上不画出来。
         }    
       }
       return this.comparingStocks[symbol||options.symbol]=dataSet;
@@ -738,7 +821,7 @@ var SNB={};
           if(i){
             lineSet.push(that.paper.path(["M",0,label.yAxis,"L",that.width,label.yAxis]).attr(that.splitLineStyle));
           }
-          textSet.push(that.paper.text(that.width-12,label.yAxis-7,label.text).attr(that.fontStyle));
+          textSet.push(that.paper.text(that.width-1.5,label.yAxis-7,parseFloat(label.text).toFixed(2)).attr(that.fontStyle)).attr({"text-anchor":"end"});
         }
       }
     },
@@ -751,7 +834,7 @@ var SNB={};
       this.timeLineSet=this.paper.set();
       for(var i=0,len=points.length;i<len;i++){
         var point=points[i];
-        if(point){
+        if(point&&!point.isNull){
           pathArray=pathArray.concat(point.currentXAxis,point.currentYAxis);
           if(!i){
             pathArray.push("L");
@@ -1449,7 +1532,7 @@ var SNB={};
         for(var i=0,len=points.length;i<len;i++){
           var point=points[i],
               index=0;
-          if(point){
+          if(point&&!point.isNull){
             if(xAxis>point.currentXAxis&&xAxis<=point.currentXAxis+gap){
               index=i;
             }
@@ -1555,12 +1638,6 @@ var SNB={};
           if(that.width/that.xGap<=13&&flag>0&&that.period=="30d"){
             return false;
           }
-          //判断这点还有些问题。。。
-          /*
-           *if(that.width/that.xGap<=40&&flag>0&&that.period=="10d"){
-           *  return false;
-           *}
-           */
           if(that.slice){
             var moveTimeRatio=that.width*ratio/that.xGap;
             var timespanInterval=that.dataSet.pointsList[1].timespan-that.dataSet.pointsList[0].timespan;
@@ -1875,7 +1952,6 @@ var SNB={};
       return {money:"$",market:"美股",bigType:"美股",stockType:"$Stock"};
     },
     fixPoint:function(points){
-      
     }
   }
 }($))
