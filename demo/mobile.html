@@ -3,6 +3,13 @@
   <head>
   <title>Raphael Demo</title>
   <script type="text/javascript" src="/static/js/lib/raphael.js"></script>
+  <style>
+    body{
+      width:200px;
+      margin:auto;
+    }
+  
+  </style>
   </head>
   <body>
     <div id="holder"></div>
@@ -23,26 +30,11 @@
         return this.path(path.join(",")).attr({stoke:color});
       }
       var paper=new Raphael("holder",600,600);
-//      paper.drawGrid(0,0,500,300,10,20);
-//
-  //    var p2=new Raphael("test",500,500);
+      paper.drawGrid(0,0,500,300,10,20);
 
-    //  p2.path(["M",50,50,"R",260,60,300,75,20,20,38,73,"Z"]).attr({stoke:"#000"});
+      var p2=new Raphael("test",500,500);
 
-
-      var el = paper.rect(10, 20, 300, 200);
-      // translate 100, 100, rotate 45°, translate -100, 0
-      el.transform("t100,100r45t-100,0");
-      // if you want you can append or prepend transformations
-      el.transform("...t50,50");
-      el.transform("s2...");
-      // or even wrap
-      //el.transform("t50,50...t-50-50");
-      // to reset transformation call method with empty string
-      //el.transform("");
-      // to get current value call it without parameters
-      console.log(el.transform());
-
+      p2.path(["M",50,50,"R",260,60,300,75,20,20,38,73,"Z"]).attr({stoke:"#000"});
     </script>
   
   </body>

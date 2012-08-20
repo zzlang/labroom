@@ -88,6 +88,7 @@ html
   body
     .container
       #stock
+      #holdStockChart
       script(src='/socket.io/socket.io.js')
       script(src='/static/js/lib/jquery.js')
       script(src='/static/js/lib/jquery.ui.js')
@@ -95,6 +96,7 @@ html
       script(src='/static/js/lib/raphael.js')
       script(src='/static/js/lib/underscore.js')
       script(src='/static/js/stockChartNew.js')
+      script(src='/static/js/holdStockChart.js')
       script(src='/static/js/My97DatePicker/WdatePicker.js')
       script
         var chart1=new SNB.stockChart({container:"stock",symbol:"01688"});
